@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Volatility Predictor (Gráfico)</title>
+
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(to bottom right, #0f0c29, #302b63, #24243e); /* Fondo oscuro crypto */
+            color: #e0e0e0; /* Texto claro */
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #game-container {
+            background-color: rgba(255, 255, 255, 0.1); /* Fondo semi-transparente */
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 255, 255, 0.2); /* Sombra con toque cyan */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            max-width: 500px; /* Ajuste para el gráfico */
+            width: 95%; /* Ajuste para móvil */
+        }
+
+        h1 {
+            color: #66fcf1; /* Color cyber-punk */
+            margin-top: 0;
+            margin-bottom: 20px;
+            text-shadow: 0 0 5px #66fcf1;
+        }
+
+        #status {
+            margin-bottom: 20px;
+            font-size: 1.4em;
+            font-weight: bold;
+            min-height: 1.5em;
+            color: #c5c6c7; /* Gris claro */
+        }
+
+        #price-info {
+            margin-bottom: 25px;
+            width: 100%; /* Para que el gráfico ocupe el ancho */
+        }
+
+        #current-price-display {
+            font-size: 2em;
+            font-weight: bold;
+            color: #45a29e; /* Verde azulado */
+            margin-bottom: 10px;
+        }
+
+        #last-move {
+            font-size: 1.2em; /* Ajustado un poco */
+            font-weight: bold;
+            min-height: 1.2em; /* Evitar salto */
+            margin-bottom: 15px; /* Espacio bajo la flecha */
+        }
+
+        .move-up {
+            color: #00ff00; /* Verde brillante */
+        }
+
+        .move-down {
+            color: #ff0000; /* Rojo brillante */
+        }
+
+        /* Estilo para el gráfico */
+        #price-chart {
+            width: 100%; /* Ocupa el ancho del contenedor */
+            height: 200px; /* Altura fija para simplificar */
+            border: 1px solid #45a29e; /* Borde sutil */
+            margin-bottom: 15px;
+            background-color: rgba(255, 255, 255, 0.05); /* Fondo muy claro para el gráfico */
+        }
+
+
+        #prediction-buttons {
+            margin-top: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px; /* Espacio entre botones */
+        }
+
+        button {
+            padding: 12px 25px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            color: white;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        #buy-button {
+            background-color: #28a745; /* Verde Bootstrap */
+        }
+
+        #buy-button:not(:disabled):hover {
+            background-color: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4);
+        }
+
+        #sell-button {
+            background-color: #dc3545; /* Rojo Bootstrap */
+        }
+
+        #sell-button:not(:disabled):hover {
+            background-color: #c82333;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4);
+        }
+
+        #reset-button {
+            background-color: #17a2b8; /* Azul Bootstrap */
+            margin-top: 15px;
+        }
+        #reset-button:not(:disabled):hover {
+             background-color: #138496;
+             transform: translateY(-2px);
+             box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4);
+        }
+
+
+         /* Mensaje de resultado del round */
+        #round-result {
+            font-size: 1.1em;
+            min-height: 1.3em;
+            margin-top: 10px;
+        }
+        .result-win {
+             color: #00ff00; /* Verde brillante */
+        }
+        .result-loss {
+             color: #ff0000; /* Rojo brillante */
+        }
+        .result-neutral {
+             color: #c5c6c7; /* Gris claro */
+        }
+
+         /* Ajuste para pantallas más pequeñas */
+        @media (max-width: 500px) { /* Ajustado el breakpoint ligeramente */
+            #game-container {
+                padding: 20px;
+            }
+            h1 {
+                font-size: 1.6em;
+            }
+            #status {
+                font-size: 1.2em;
+            }
+             #current-price-display {
+                font-size: 1.8em;
+            }
+            #last-move {
+                font-size: 1.1em;
+            }
+            button {
+                padding: 10px 20px;
+                font-size: 1em;
+            }
+             #prediction-buttons {
+                 gap: 15px;
+             }
+             #round-result {
+                 font-size: 1em;
+             }
+             #price-chart {
+                 height: 150px; /* Reducir altura del gráfico en móviles */
+             }
+        }
+    </style>
+<style type="text/css">
+.grande { font-size: 60px; }
+</style>
+<script>
+// Escribir aqui el código Javascript
+</script>
+</head>
+<body>
+
+    <div id="game-container">
+        <h1>Crypto Volatility Predictor</h1>
+
+        <div id="status" style="color: rgb(0, 255, 0);">¡Juego Terminado! Rondas completadas: 25/25. Has terminado con una ganancia de $194.05! 🎉</div>
+
+        <div id="price-info">
+            Precio de CryptoCoin: <span id="current-price-display">57.98</span>
+            <canvas id="price-chart" width="413" height="152"></canvas>
+            <div id="last-move" class="move-up"></div>
+            <div id="round-result" class="result-win">¡Ganaste $5.51!</div>
+        </div>
+
+
+        <div id="prediction-buttons">
+            <button id="buy-button" disabled="">Subirá (BUY)</button>
+            <button id="sell-button" disabled="">Bajará (SELL)</button>
+        </div>
+
+        <button id="reset-button">Reiniciar Juego</button>
+    </div>
+
+    <script>
+        const statusDisplay = document.getElementById('status');
+        const currentPriceDisplay = document.getElementById('current-price-display');
+        const lastMoveDisplay = document.getElementById('last-move');
+        const roundResultDisplay = document.getElementById('round-result');
+        const buyButton = document.getElementById('buy-button');
+        const sellButton = document.getElementById('sell-button');
+        const resetButton = document.getElementById('reset-button');
+        const priceChartCanvas = document.getElementById('price-chart');
+        const ctx = priceChartCanvas.getContext('2d');
+
+
+        let capital;
+        let currentPrice;
+        let round;
+        let isGameOver = false;
+        let lastChangeDirection = 'none'; // 'up', 'down', or 'none'
+        let priceHistory = []; // Array para almacenar historial de precios
+
+        const maxRounds = 25; // Aumentamos rondas para ver más gráfica
+        const initialCapital = 1000; // Capital inicial
+        const initialPrice = 100; // Precio inicial
+        const maxVolatility = 0.08; // Volatilidad base ligeramente reducida (+/- 8%)
+        const trendBias = 0.3; // Factor de sesgo de tendencia aumentado (0.3 = 30% bias, 80% chance to follow trend)
+
+        // --- Inicializar el juego ---
+        function initGame() {
+            capital = initialCapital;
+            currentPrice = initialPrice;
+            round = 1;
+            isGameOver = false;
+            lastChangeDirection = 'none';
+            priceHistory = [initialPrice]; // Empezar historial con el precio inicial
+
+            // Asegurarse de que el canvas tiene el tamaño correcto basado en CSS antes de dibujar
+            // Esto es importante si el tamaño del canvas se define en CSS (width/height)
+            priceChartCanvas.width = priceChartCanvas.offsetWidth;
+            priceChartCanvas.height = priceChartCanvas.offsetHeight;
+
+
+            updateUI();
+            drawGraph(); // Dibujar el gráfico inicial
+            enableButtons();
+            lastMoveDisplay.textContent = '';
+            lastMoveDisplay.className = '';
+            roundResultDisplay.textContent = 'Haz tu predicción:';
+             roundResultDisplay.className = '';
+
+            console.log("Juego inicializado.");
+        }
+
+        // --- Actualizar la interfaz de usuario (texto) ---
+        function updateUI() {
+            statusDisplay.textContent = `Ronda: ${round}/${maxRounds} | Capital: $${capital.toFixed(2)}`;
+            currentPriceDisplay.textContent = `${currentPrice.toFixed(2)}`;
+        }
+
+        // --- Dibujar el gráfico ---
+        function drawGraph() {
+            const canvasWidth = priceChartCanvas.width;
+            const canvasHeight = priceChartCanvas.height;
+
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight); // Limpiar canvas
+
+            if (priceHistory.length < 1) return;
+
+            // Margen interior para que la línea no toque los bordes
+            const margin = 15;
+            const drawableWidth = canvasWidth - 2 * margin;
+            const drawableHeight = canvasHeight - 2 * margin;
+
+            if (drawableWidth <= 0 || drawableHeight <= 0) return;
+
+            // Calcular escala Y
+            const minPrice = Math.min(...priceHistory);
+            const maxPrice = Math.max(...priceHistory);
+            const priceRange = maxPrice - minPrice;
+
+            // Añadir un pequeño padding al rango para que los puntos no toquen los bordes superior/inferior
+            const paddingY = priceRange * 0.1 || initialPrice * 0.1; // 10% del rango o 10% del precio inicial
+            const displayMinPrice = minPrice - paddingY;
+            const displayMaxPrice = maxPrice + paddingY;
+            const displayPriceRange = displayMaxPrice - displayMinPrice;
+
+
+            const yScale = displayPriceRange === 0 ? 0 : drawableHeight / displayPriceRange;
+            const xScale = drawableWidth / (priceHistory.length - 1 || 1);
+
+
+            // --- Dibujar línea del precio inicial (línea base) ---
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; // Blanco semi-transparente
+            ctx.lineWidth = 1;
+            // Calcular la posición Y de la línea inicial
+            const initialPriceY = margin + drawableHeight - (initialPrice - displayMinPrice) * yScale;
+            // Asegurarse de que la línea esté dentro del área de dibujo
+            if (initialPriceY >= margin && initialPriceY <= margin + drawableHeight) {
+                 ctx.moveTo(margin, initialPriceY);
+                 ctx.lineTo(margin + drawableWidth, initialPriceY);
+            }
+            ctx.stroke();
+
+
+            // --- Dibujar línea del precio actual ---
+            ctx.beginPath();
+            ctx.strokeStyle = '#66fcf1'; // Color de la línea del gráfico
+            ctx.lineWidth = 2;
+
+            // Mover al primer punto del historial
+            const historyFirstX = margin;
+            const historyFirstY = margin + drawableHeight - (priceHistory[0] - displayMinPrice) * yScale;
+            ctx.moveTo(historyFirstX, historyFirstY);
+
+            // Dibujar línea a través del historial de precios
+            for (let i = 1; i < priceHistory.length; i++) {
+                const x = margin + i * xScale;
+                const y = margin + drawableHeight - (priceHistory[i] - displayMinPrice) * yScale;
+                ctx.lineTo(x, y);
+            }
+
+            ctx.stroke();
+
+            // Dibujar un punto grande en el precio actual
+            ctx.beginPath();
+            ctx.fillStyle = '#45a29e'; // Color del punto
+            const lastPointX = margin + (priceHistory.length - 1) * xScale;
+            const lastPointY = margin + drawableHeight - (priceHistory[priceHistory.length - 1] - displayMinPrice) * yScale;
+            ctx.arc(lastPointX, lastPointY, 5, 0, Math.PI * 2); // Radio 5, un poco más grande
+            ctx.fill();
+
+             // Opcional: Dibujar el precio mínimo/máximo visible en los bordes
+             /*
+             ctx.font = '10px Arial';
+             ctx.fillStyle = '#c5c6c7';
+             ctx.fillText(displayMaxPrice.toFixed(2), margin, margin - 5);
+             ctx.fillText(displayMinPrice.toFixed(2), margin, margin + drawableHeight + 15);
+             */
+        }
+
+
+        // --- Simular una ronda ---
+        function simulateRound(prediction) {
+            // Deshabilitar botones mientras se simula
+            disableButtons();
+            roundResultDisplay.textContent = 'Simulando...';
+            roundResultDisplay.className = '';
+
+
+            // --- Lógica de cambio de precio con sesgo de tendencia ---
+            let direction;
+            const randomFactor = Math.random();
+            const biasThreshold = 0.5 + trendBias;
+
+            if (lastChangeDirection === 'up') {
+                direction = randomFactor < biasThreshold ? 'up' : 'down';
+            } else if (lastChangeDirection === 'down') {
+                direction = randomFactor < biasThreshold ? 'down' : 'up';
+            } else { // Primera ronda
+                 direction = randomFactor < 0.5 ? 'up' : 'down';
+            }
+
+            // Determinar la magnitud del cambio aleatorio (asegurarse de que no sea 0)
+            let changeMagnitude = 0;
+            while(changeMagnitude < 0.001) { // Asegurar que la magnitud sea > 0.1%
+                changeMagnitude = Math.random() * maxVolatility;
+            }
+
+            // Calcular el cambio real basado en la dirección
+            const change = direction === 'up' ? changeMagnitude : -changeMagnitude;
+
+            // --- Calcular nuevo precio y resultado ---
+            const newPrice = currentPrice * (1 + change);
+
+            let profitLossAmount = 0;
+            let resultText = '';
+            let resultClass = '';
+
+            if ((prediction === 'buy' && direction === 'up') || (prediction === 'sell' && direction === 'down')) {
+                // Ganaste
+                // La ganancia/pérdida se basa en el CAPITAL arriesgado (aquí arriesgamos el 100% por simplicidad)
+                profitLossAmount = capital * Math.abs(change);
+                capital += profitLossAmount;
+                resultText = `¡Ganaste $${profitLossAmount.toFixed(2)}!`;
+                resultClass = 'result-win';
+            } else {
+                 // Perdiste
+                profitLossAmount = capital * Math.abs(change);
+                capital -= profitLossAmount;
+                resultText = `Perdiste $${profitLossAmount.toFixed(2)}.`;
+                resultClass = 'result-loss';
+            }
+
+             // Asegurar que el capital no sea negativo
+             if (capital < 0) capital = 0;
+
+
+            currentPrice = newPrice; // Actualizar el precio para la siguiente ronda
+            lastChangeDirection = direction; // Guardar la dirección para la siguiente ronda
+            priceHistory.push(currentPrice); // Añadir nuevo precio al historial
+            round++; // Avanzar a la siguiente ronda
+
+
+            // --- Actualizar UI después de simular ---
+
+            // Actualizar indicador de movimiento
+            const moveText = change > 0 ? `↑ +${(change * 100).toFixed(2)}%` : `↓ ${(change * 100).toFixed(2)}%`;
+            lastMoveDisplay.textContent = moveText;
+            lastMoveDisplay.className = change > 0 ? 'move-up' : 'move-down';
+
+             // Mostrar resultado del round después de un breve retardo
+             setTimeout(() => {
+                roundResultDisplay.textContent = resultText;
+                roundResultDisplay.className = resultClass;
+             }, 300);
+
+            // Actualizar UI principal (capital y ronda)
+            updateUI();
+
+            // Redibujar el gráfico con el nuevo punto
+            drawGraph();
+
+
+            // Verificar fin del juego
+            if (round > maxRounds || capital <= 0) {
+                endGame();
+            } else {
+                 // Habilitar botones para la siguiente ronda después de un retardo
+                 setTimeout(() => {
+                     enableButtons();
+                     roundResultDisplay.textContent = 'Haz tu predicción:';
+                     roundResultDisplay.className = '';
+                 }, 1500); // Espera un poco más para que el usuario asimile el resultado y la gráfica
+            }
+        }
+
+        // --- Fin del juego ---
+        function endGame() {
+            isGameOver = true;
+            disableButtons(); // Asegurar que estén deshabilitados
+
+            let finalMessage = `¡Juego Terminado! Rondas completadas: ${round -1}/${maxRounds}.`;
+
+            if (capital > initialCapital) {
+                finalMessage += ` Has terminado con una ganancia de $${(capital - initialCapital).toFixed(2)}! 🎉`;
+                 statusDisplay.style.color = '#00ff00'; // Verde para victoria
+            } else if (capital < initialCapital) {
+                finalMessage += ` Has terminado con una pérdida de $${(initialCapital - capital).toFixed(2)}. 😢`;
+                 statusDisplay.style.color = '#ff0000'; // Rojo para derrota
+            } else {
+                 finalMessage += ` Has terminado exactamente con tu capital inicial. 🤔`;
+                 statusDisplay.style.color = '#c5c6c7'; // Color normal
+            }
+
+             if (capital <= 0) {
+                 finalMessage = `¡Capital agotado! Juego Terminado. 💸`;
+                 statusDisplay.style.color = '#ff0000'; // Rojo para derrota
+             }
+
+
+            statusDisplay.textContent = finalMessage;
+             lastMoveDisplay.textContent = ''; // Limpiar indicador final
+             roundResultDisplay.textContent = ''; // Limpiar resultado final
+
+             // Opcional: dibujar el punto final en la gráfica de manera diferente o añadir un mensaje en la gráfica
+
+            console.log("Juego terminado.");
+        }
+
+        // --- Habilitar botones de predicción ---
+        function enableButtons() {
+            if (!isGameOver) {
+                buyButton.disabled = false;
+                sellButton.disabled = false;
+                // roundResultDisplay.textContent = 'Haz tu predicción:'; // Movido el mensaje al timeout de simulateRound
+                 // roundResultDisplay.className = '';
+            }
+        }
+
+        // --- Deshabilitar botones de predicción ---
+        function disableButtons() {
+            buyButton.disabled = true;
+            sellButton.disabled = true;
+        }
+
+        // --- Event Listeners ---
+        buyButton.addEventListener('click', () => simulateRound('buy'));
+        sellButton.addEventListener('click', () => simulateRound('sell'));
+        resetButton.addEventListener('click', initGame);
+
+        // --- Iniciar el juego al cargar la página ---
+        document.addEventListener('DOMContentLoaded', () => {
+             // Asegurarse de que el canvas tiene el tamaño correcto basado en CSS antes de dibujar
+             priceChartCanvas.width = priceChartCanvas.offsetWidth;
+             priceChartCanvas.height = priceChartCanvas.offsetHeight;
+
+             initGame();
+         });
+
+    </script>
+
+
+
+</body></html>
