@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Snake ECU</title>
+
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(to bottom, #0f0c29, #302b63, #24243e); /* Fondo oscuro */
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #game-container {
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 500px;
+            width: 95%;
+            position: relative; /* Necesario para posicionar mensajes absolutos */
+        }
+
+        h1 {
+            color: #66fcf1;
+            margin-top: 0;
+            margin-bottom: 15px;
+            text-shadow: 0 0 5px #66fcf1;
+        }
+
+        #status {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            min-height: 1.4em;
+        }
+
+        #game-area {
+            border: 2px solid #45a29e;
+            background-color: #000;
+            display: block;
+            margin: 0 auto 15px auto;
+            max-width: 100%;
+            height: auto;
+            touch-action: none; /* Evita scroll/zoom en canvas */
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #5cb85c;
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #4cae4c;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Mensajes superpuestos en el canvas */
+        #game-over-message, #level-message {
+            position: absolute;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: bold;
+            color: #ff0000;
+            text-shadow: 0 0 10px #ff0000;
+            z-index: 10;
+            pointer-events: none; /* No bloquear clics debajo */
+        }
+
+        #game-over-message {
+            top: 50%;
+            font-size: 2.5em;
+             display: none;
+             color: #e0e0e0;
+             text-shadow: 0 0 15px rgba(0, 255, 255, 0.8);
+        }
+         #game-over-message.visible {
+             display: block;
+         }
+
+        #level-message {
+            top: 20%;
+            font-size: 2em;
+            color: #66fcf1;
+            text-shadow: 0 0 10px #66fcf1;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+        #level-message.visible {
+            opacity: 1;
+        }
+
+
+        /* Ajuste para pantallas pequeñas */
+        @media (max-width: 500px) {
+             #game-container {
+                 padding: 15px;
+             }
+             h1 {
+                 font-size: 1.5em;
+             }
+             #status {
+                 font-size: 1em;
+             }
+             button {
+                 padding: 8px 15px;
+                 font-size: 0.9em;
+             }
+             #game-over-message {
+                 font-size: 1.8em;
+             }
+             #level-message {
+                 font-size: 1.6em;
+             }
+        }
+    </style>
+<style type="text/css">
+.grande { font-size: 60px; }
+</style>
+<script>
+// Escribir aqui el código Javascript
+</script>
+</head>
+<body>
+
+    <div id="game-container">
+        <h1>Crypto Snake</h1>
+        <div id="status">Score: 0 BTC</div>
+
+        <canvas id="game-area" width="400" height="400"></canvas>
+
+        <div id="game-over-message">¡GAME OVER!</div>
+        <div id="level-message">Nivel 1</div>
+
+        <button id="start-button">Start Game</button>
+
+        <audio id="collect-sound" src="put_your_collect_sound_url_here.mp3"></audio>
+        <audio id="lose-sound" src="put_your_lose_sound_url_here.mp3"></audio>
+
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game-area');
+        const ctx = canvas.getContext('2d');
+        const statusDisplay = document.getElementById('status');
+        const startButton = document.getElementById('start-button');
+        const gameOverMessage = document.getElementById('game-over-message');
+        const levelMessage = document.getElementById('level-message');
+        const collectSound = document.getElementById('collect-sound');
+        const loseSound = document.getElementById('lose-sound');
+
+
+        const gridSize = 20;
+        const boardWidth = canvas.width / gridSize;
+        const boardHeight = canvas.height / gridSize;
+
+
+        let gameLoopId;
+        let score = 0;
+        let lives = 3;
+        let isGameOver = false;
+
+        let snake = [];
+        let food = { x: 0, y: 0 };
+
+        let dx = 1;
+        let dy = 0;
+        let changingDirection = false;
+
+        const baseSnakeSpeed = 150;
+        let currentSnakeSpeed = baseSnakeSpeed;
+        const speedIncreaseFactor = 0.95;
+
+        const levelUpScoreThreshold = 5;
+
+
+        const numStars = 100;
+        const stars = [];
+        let starTwinkleTimer = 0;
+
+        let particles = [];
+
+        let accumulatedTime = 0;
+        let lastFrameTime = performance.now();
+
+
+        // --- Game Loop ---
+        function gameLoop(currentTime) {
+            gameLoopId = requestAnimationFrame(gameLoop);
+
+            const deltaTime = currentTime - (gameLoop.lastTime || currentTime);
+            gameLoop.lastTime = currentTime;
+
+            if (isGameOver) {
+                 return;
+            }
+
+            accumulatedTime += deltaTime;
+
+
+            // --- Game Logic (Fixed Time Step) ---
+            while (accumulatedTime >= currentSnakeSpeed) {
+                 changingDirection = false;
+
+                 moveSnake();
+
+                 if (isGameOver) {
+                      accumulatedTime = 0;
+                      draw();
+                      return;
+                 }
+
+                 accumulatedTime -= currentSnakeSpeed;
+            }
+
+            // --- Drawing (Every Frame) ---
+            updateParticles();
+            draw();
+
+        }
+
+        // --- Initialization ---
+        function initGame() {
+            score = 0;
+            lives = 3;
+            isGameOver = false;
+            snake = [];
+            snake.push({ x: Math.floor(boardWidth / 2), y: Math.floor(boardHeight / 2) });
+            snake.push({ x: Math.floor(boardWidth / 2) - 1, y: Math.floor(boardHeight / 2) });
+            snake.push({ x: Math.floor(boardWidth / 2) - 2, y: Math.floor(boardHeight / 2) });
+
+            dx = 1;
+            dy = 0;
+
+            changingDirection = false;
+            accumulatedTime = 0;
+
+            currentSnakeSpeed = baseSnakeSpeed;
+            generateFood();
+            particles = [];
+            gameOverMessage.classList.remove('visible');
+            // levelMessage.classList.remove('visible'); // Managed by showLevelMessage timer
+
+
+             // Ensure canvas size is correct on start/reset before generating stars
+             canvas.width = canvas.offsetWidth;
+             canvas.height = canvas.offsetHeight;
+
+            if (stars.length === 0 || canvas.width !== stars.canvasWidth || canvas.height !== stars.canvasHeight) {
+                 stars.length = 0;
+                 const numStarsBg = Math.floor((canvas.width * canvas.height) / 2000);
+                 for(let i = 0; i < numStarsBg; i++){
+                     stars.push({
+                         x: Math.random() * canvas.width,
+                         y: Math.random() * canvas.height,
+                         radius: Math.random() * 1.5 + 0.5,
+                         alpha: Math.random() * 0.5 + 0.5,
+                         twinkleSpeed: Math.random() * 0.1 + 0.02
+                     });
+                 }
+                 stars.canvasWidth = canvas.width;
+                 stars.canvasHeight = canvas.height;
+            }
+
+
+            updateStatus();
+            startButton.disabled = true;
+            startButton.textContent = "Playing...";
+
+
+            lastFrameTime = performance.now();
+            gameLoopId = requestAnimationFrame(gameLoop);
+
+
+            console.log("Game Started!");
+            showLevelMessage();
+        }
+
+         // --- Show Level Up Message (Optional) ---
+         function showLevelMessage() {
+             if (showLevelMessage.timeoutId) {
+                 clearTimeout(showLevelMessage.timeoutId);
+             }
+
+             levelMessage.textContent = `Nivel ${Math.floor(score / levelUpScoreThreshold) + 1}`;
+             levelMessage.classList.add('visible');
+
+             showLevelMessage.timeoutId = setTimeout(() => {
+                 levelMessage.classList.remove('visible');
+             }, 1500);
+         }
+
+
+        // --- Input Handling (Keyboard and Touch) ---
+
+        // Keyboard
+        document.addEventListener('keydown', (event) => {
+            if (isGameOver || changingDirection) return;
+
+            const keyPressed = event.key;
+
+            const goingUp = dy === -1;
+            const goingDown = dy === 1;
+            const goingLeft = dx === -1;
+            const goingRight = dx === 1;
+
+            if (keyPressed === 'ArrowUp' || keyPressed === 'w') {
+                if (!goingDown) { dx = 0; dy = -1; changingDirection = true; }
+            } else if (keyPressed === 'ArrowDown' || keyPressed === 's') {
+                if (!goingUp) { dx = 0; dy = 1; changingDirection = true; }
+            } else if (keyPressed === 'ArrowLeft' || keyPressed === 'a') {
+                if (!goingRight) { dx = -1; dy = 0; changingDirection = true; }
+            } else if (keyPressed === 'ArrowRight' || keyPressed === 'd') {
+                if (!goingLeft) { dx = 1; dy = 0; changingDirection = true; }
+            }
+        });
+
+        // Touch Controls (Swipe Detection)
+        let touchStartX = 0;
+        let touchStartY = 0;
+        const swipeThreshold = 20;
+
+        canvas.addEventListener('touchstart', (event) => {
+             if (isGameOver || changingDirection) return;
+             event.preventDefault();
+             if (event.touches.length > 0) {
+                 touchStartX = event.touches[0].clientX;
+                 touchStartY = event.touches[0].clientY;
+             }
+        });
+
+         canvas.addEventListener('touchend', (event) => {
+            if (isGameOver || changingDirection) return;
+             if (event.changedTouches.length === 0) return;
+
+             const touchEndX = event.changedTouches[0].clientX;
+             const touchEndY = event.changedTouches[0].clientY;
+
+             const deltaX = touchEndX - touchStartX;
+             const deltaY = touchEndY - touchStartY;
+
+             if (Math.abs(deltaX) > swipeThreshold || Math.abs(deltaY) > swipeThreshold) {
+                 if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                     if (deltaX > 0) {
+                         if (dx !== -1) { dx = 1; dy = 0; changingDirection = true; }
+                     } else {
+                         if (dx !== 1) { dx = -1; dy = 0; changingDirection = true; }
+                     }
+                 } else {
+                      if (deltaY > 0) {
+                          if (dy !== -1) { dx = 0; dy = 1; changingDirection = true; }
+                      } else {
+                          if (dy !== 1) { dx = 0; dy = -1; changingDirection = true; }
+                      }
+                 }
+             }
+         });
+
+        canvas.addEventListener('touchmove', (event) => {
+            if (isGameOver) return;
+            event.preventDefault();
+        });
+
+
+        // --- Move Snake (Game Tick Logic) ---
+        function moveSnake() {
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+            if (checkCollision(head)) {
+                endGame();
+                return;
+            }
+
+            snake.unshift(head);
+
+            const didEatFood = head.x === food.x && head.y === food.y;
+
+            if (didEatFood) {
+                score++;
+                currentSnakeSpeed = Math.max(50, currentSnakeSpeed * speedIncreaseFactor);
+
+                generateFood();
+
+                if (score > 0 && score % levelUpScoreThreshold === 0) {
+                    showLevelMessage();
+                }
+
+                createParticles(food.x * gridSize + gridSize / 2, food.y * gridSize + gridSize / 2, '#FFD700', 20);
+
+
+                 if (collectSound && collectSound.readyState >= 2) {
+                     collectSound.currentTime = 0;
+                     collectSound.play().catch(e => console.error("Collect sound error:", e));
+                 }
+
+            } else {
+                snake.pop();
+            }
+
+            updateStatus();
+        }
+
+        // --- Check for Collision ---
+        function checkCollision(head) {
+            const hitLeftWall = head.x < 0;
+            const hitRightWall = head.x >= boardWidth;
+            const hitTopWall = head.y < 0;
+            const hitBottomWall = head.y >= boardHeight;
+
+            if (hitLeftWall || hitRightWall || hitTopWall || hitBottomWall) {
+                return true;
+            }
+
+            for (let i = 3; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // --- Generate Food ---
+        function generateFood() {
+            let foodX, foodY;
+            do {
+                foodX = Math.floor(Math.random() * boardWidth);
+                foodY = Math.floor(Math.random() * boardHeight);
+            } while (
+                snake.some(segment => segment.x === foodX && segment.y === foodY));
+
+            food = { x: foodX, y: foodY };
+        }
+
+
+        // --- Add Particle Effect ---
+         function createParticles(x, y, color, count = 15) {
+             for (let i = 0; i < count; i++) {
+                 const angle = Math.random() * Math.PI * 2;
+                 const speed = Math.random() * 2 + 0.5;
+                 particles.push({
+                     x: x,
+                     y: y,
+                     color: color,
+                     speedX: Math.cos(angle) * speed,
+                     speedY: Math.sin(angle) * speed,
+                     size: Math.random() * 2 + 0.5,
+                     alpha: 1
+                 });
+             }
+         }
+
+         function updateParticles(deltaTime) {
+             for (let i = particles.length - 1; i >= 0; i--) {
+                 const p = particles[i];
+                 p.x += p.speedX;
+                 p.y += p.speedY;
+                 p.alpha -= 0.03;
+                 p.size *= 0.95;
+
+                 if (p.alpha <= 0.1 || p.size <= 0.5) {
+                     particles.splice(i, 1);
+                 }
+             }
+         }
+
+         function drawParticles() {
+             particles.forEach(p => {
+                 ctx.globalAlpha = p.alpha;
+                 ctx.fillStyle = p.color;
+                 ctx.beginPath();
+                 ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                 ctx.fill();
+             });
+             ctx.globalAlpha = 1;
+         }
+
+
+        // --- Draw Background (Stars, Grid, and Text) ---
+        function drawBackground() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Stars
+            ctx.fillStyle = '#fff';
+            starTwinkleTimer += 0.01;
+
+             if (stars.length === 0 || canvas.width !== stars.canvasWidth || canvas.height !== stars.canvasHeight) {
+                 stars.length = 0;
+                 const numStarsBg = Math.floor((canvas.width * canvas.height) / 2000);
+                 for(let i = 0; i < numStarsBg; i++){
+                     stars.push({
+                         x: Math.random() * canvas.width,
+                         y: Math.random() * canvas.height,
+                         radius: Math.random() * 1.5 + 0.5,
+                         alpha: Math.random() * 0.5 + 0.5,
+                         twinkleSpeed: Math.random() * 0.1 + 0.02
+                     });
+                 }
+                 stars.canvasWidth = canvas.width;
+                 stars.canvasHeight = canvas.height;
+            }
+
+
+            stars.forEach(star => {
+                star.alpha = Math.sin(star.twinkleSpeed * starTwinkleTimer + star.x * 0.1) * 0.5 + 0.5;
+                ctx.globalAlpha = star.alpha;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+
+            // Draw Grid Lines
+             ctx.strokeStyle = 'rgba(69, 162, 158, 0.2)';
+             ctx.lineWidth = 1;
+             for (let i = 0; i < boardWidth; i++) {
+                 ctx.beginPath();
+                 ctx.moveTo(i * gridSize, 0);
+                 ctx.lineTo(i * gridSize, canvas.height);
+                 ctx.stroke();
+             }
+             for (let i = 0; i < boardHeight; i++) {
+                 ctx.beginPath();
+                 ctx.moveTo(0, i * gridSize);
+                 ctx.lineTo(canvas.width, i * gridSize);
+                 ctx.stroke();
+             }
+
+             // --- Draw Background Text "TIENDA CRYPTO ECUADOR" ---
+            const bgText = "TIENDA CRYPTO ECUADOR";
+            // Usar el mismo estilo elegante
+            ctx.font = 'italic bold 25px Georgia, serif';
+            ctx.shadowColor = 'rgba(255, 215, 0, 0.5)';
+            ctx.shadowBlur = 5;
+
+            // Usar baja opacidad y centrado
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.15)'; // Opacidad ligeramente menor para no obstruir
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // Posicionar el texto centrado en el canvas
+            const textX = canvas.width / 2;
+            const textY = canvas.height / 2; // Centrado verticalmente
+
+            ctx.fillText(bgText, textX, textY);
+
+            // Reset shadow properties
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+        }
+
+        // --- Draw Snake ---
+        function drawSnake() {
+            snake.forEach((segment, index) => {
+                if (index === 0) { // Head
+                    ctx.fillStyle = '#FFD700';
+                    ctx.strokeStyle = '#B8860B';
+                } else { // Body
+                    ctx.fillStyle = '#66fcf1';
+                    ctx.strokeStyle = '#45a29e';
+                }
+
+                 const x = segment.x * gridSize;
+                 const y = segment.y * gridSize;
+                 const size = gridSize;
+                 const radius = 4;
+
+                 ctx.beginPath();
+                 ctx.moveTo(x + radius, y);
+                 ctx.lineTo(x + size - radius, y);
+                 ctx.arcTo(x + size, y, x + size, y + radius, radius);
+                 ctx.lineTo(x + size, y + size - radius);
+                 ctx.arcTo(x + size, y + size, x + size - radius, y + size, radius);
+                 ctx.lineTo(x + radius, y + size);
+                 ctx.arcTo(x, y + size, x, y + size - radius, radius);
+                 ctx.lineTo(x, y + radius);
+                 ctx.arcTo(x, y, x + radius, y, radius);
+                 ctx.closePath();
+                 ctx.fill();
+                 ctx.lineWidth = 1;
+                 ctx.stroke();
+            });
+        }
+
+        // --- Draw Food (BTC) ---
+        function drawFood() {
+            const x = food.x * gridSize;
+            const y = food.y * gridSize;
+            const size = gridSize;
+
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(x + size / 2, y + size / 2, size / 2 * 0.8, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.font = 'Bold 12px Arial';
+            ctx.fillStyle = '#4B3B02';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('BTC', x + size / 2, y + size / 2);
+        }
+
+
+        // --- Draw Everything (main draw function) ---
+        function draw() {
+            drawBackground();
+            drawSnake();
+            drawFood();
+            drawParticles();
+        }
+
+        // --- Update Status Display ---
+        function updateStatus() {
+            const satoshiScore = score * 100000000;
+             const formattedSatoshiScore = satoshiScore.toLocaleString('es-EC');
+
+            statusDisplay.textContent = `Score: ${score} BTC (${formattedSatoshiScore} sats)`;
+        }
+
+        // --- End Game ---
+        function endGame() {
+            isGameOver = true;
+            cancelAnimationFrame(gameLoopId);
+
+            gameOverMessage.classList.add('visible');
+            levelMessage.classList.remove('visible');
+            startButton.disabled = false;
+            startButton.textContent = "Play Again";
+
+             if (loseSound && loseSound.readyState >= 2) {
+                 loseSound.currentTime = 0;
+                 loseSound.play().catch(e => console.error("Lose sound error:", e));
+             }
+
+
+            console.log("Game Over! Final Score:", score);
+        }
+
+        // --- Event Listener for Start Button ---
+        startButton.addEventListener('click', initGame);
+
+
+        // --- Draw Start Screen ---
+         function drawStartScreen(){
+             canvas.width = canvas.offsetWidth;
+             canvas.height = canvas.offsetHeight;
+
+             drawBackground(); // Draw background (includes text)
+
+             // Draw a static snake example
+             const startSnakeY = Math.floor(boardHeight * 0.7) * gridSize;
+             const startSnakeX = Math.floor(boardWidth / 2) * gridSize;
+
+             ctx.fillStyle = '#66fcf1'; // Body color
+             ctx.strokeStyle = '#45a29e'; // Body border color
+             const size = gridSize;
+             const radius = 4;
+
+             // Draw body segments
+             let x = startSnakeX - size * 2;
+             let y = startSnakeY;
+             for(let i=0; i < 3; i++){
+                 ctx.beginPath();
+                 ctx.moveTo(x + radius, y); ctx.lineTo(x + size - radius, y); ctx.arcTo(x + size, y, x + size, y + radius, radius);
+                 ctx.lineTo(x + size, y + size - radius); ctx.arcTo(x + size, y + size, x + size - radius, y + size, radius);
+                 ctx.lineTo(x + radius, y + size); ctx.arcTo(x, y + size, x, y + size - radius, radius);
+                 ctx.lineTo(x, y + radius); ctx.arcTo(x, y, x + radius, y, radius);
+                 ctx.closePath(); ctx.fill(); ctx.lineWidth = 1; ctx.stroke();
+                 x += size; // Move to draw next segment
+             }
+
+             // Draw head
+             ctx.fillStyle = '#FFD700'; // Head color
+             ctx.strokeStyle = '#B8860B'; // Head border color
+              ctx.beginPath();
+             ctx.moveTo(x + radius, y); ctx.lineTo(x + size - radius, y); ctx.arcTo(x + size, y, x + size, y + radius, radius);
+             ctx.lineTo(x + size, y + size - radius); ctx.arcTo(x + size, y + size, x + size - radius, y + size, radius);
+             ctx.lineTo(x + radius, y + size); ctx.arcTo(x, y + size, x, y + size - radius, radius);
+             ctx.lineTo(x, y + radius); ctx.arcTo(x, y, x + radius, y, radius);
+             ctx.closePath(); ctx.fill(); ctx.lineWidth = 1; ctx.stroke();
+
+
+             // Draw a static food example (BTC)
+             const foodX = Math.floor(boardWidth * 0.7) * gridSize;
+             const foodY = Math.floor(boardHeight * 0.5) * gridSize;
+              const foodSize = gridSize;
+
+             ctx.fillStyle = '#FFD700';
+             ctx.beginPath();
+             ctx.arc(foodX + foodSize / 2, foodY + foodSize / 2, foodSize / 2 * 0.8, 0, Math.PI * 2);
+             ctx.fill();
+             ctx.font = 'Bold 12px Arial';
+             ctx.fillStyle = '#4B3B02';
+             ctx.textAlign = 'center';
+             ctx.textBaseline = 'middle';
+             ctx.fillText('BTC', foodX + foodSize / 2, foodY + foodSize / 2);
+
+
+             // Instructions Text
+             ctx.font = '22px Arial';
+             ctx.fillStyle = '#c5c6c7';
+             ctx.textAlign = 'center';
+             ctx.fillText('Collect BTC', canvas.width / 2, canvas.height / 2 - 80);
+             ctx.font = '18px Arial';
+             ctx.fillStyle = '#FFD700';
+             ctx.fillText('Gain Score', canvas.width / 2, canvas.height / 2 - 50);
+             ctx.font = '18px Arial';
+             ctx.fillStyle = '#ff0000';
+             ctx.fillText('Avoid Walls & Your Body!', canvas.width / 2, canvas.height / 2 - 10);
+             ctx.font = '20px Arial';
+             ctx.fillStyle = '#c5c6c7';
+             ctx.fillText('Use ← → ↑ ↓ or Swipe', canvas.width / 2, canvas.height / 2 + 30);
+
+
+         }
+        document.addEventListener('DOMContentLoaded', drawStartScreen);
+
+
+    </script>
+
+
+
+</body></html>
