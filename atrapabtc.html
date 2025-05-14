@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Collector Sats</title>
+
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(to bottom, #0f0c29, #302b63, #24243e); /* Fondo oscuro */
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #game-container {
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 500px; /* Limita el ancho máximo del contenedor */
+            width: 95%;
+        }
+
+        h1 {
+            color: #66fcf1;
+            margin-top: 0;
+            margin-bottom: 15px;
+            text-shadow: 0 0 5px #66fcf1;
+        }
+
+        #status {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            min-height: 1.4em;
+        }
+
+        #game-area {
+            border: 2px solid #45a29e; /* Borde del área de juego */
+            background-color: #000; /* Fondo negro para el juego */
+            display: block; /* Elimina espacio extra bajo el canvas */
+            margin: 0 auto 15px auto; /* Centrar y añadir margen inferior */
+            max-width: 100%; /* Asegura que el canvas no se salga en pantallas pequeñas */
+            height: auto; /* La altura se ajustará proporcionalmente si el ancho es max */
+             touch-action: none; /* Importante para táctil: prevenir acciones por defecto */
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #5cb85c; /* Verde */
+            color: white;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #4cae4c;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Mensajes superpuestos en el canvas */
+        #game-over-message, #level-message {
+            position: absolute;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: bold;
+            color: #ff0000; /* Rojo por defecto */
+            text-shadow: 0 0 10px #ff0000;
+            z-index: 10; /* Asegurar que esté encima */
+            pointer-events: none; /* No bloquear clics debajo */
+        }
+
+        #game-over-message {
+            top: 50%;
+            font-size: 2.5em; /* Ligeramente más grande */
+             display: none; /* Oculto por defecto */
+        }
+         #game-over-message.visible {
+             display: block;
+         }
+
+        #level-message {
+            top: 20%;
+            font-size: 2em; /* Ligeramente más grande */
+            color: #66fcf1; /* Azul/Cyan para nivel */
+            text-shadow: 0 0 10px #66fcf1; /* Sombra más pronunciada */
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+        #level-message.visible {
+            opacity: 1;
+        }
+
+
+        /* Ajuste para pantallas pequeñas */
+        @media (max-width: 500px) {
+             #game-container {
+                 padding: 15px;
+             }
+             h1 {
+                 font-size: 1.5em;
+             }
+             #status {
+                 font-size: 1em;
+             }
+             button {
+                 padding: 8px 15px;
+                 font-size: 0.9em;
+             }
+             #game-over-message {
+                 font-size: 1.8em; /* Ajuste para móviles */
+             }
+             #level-message {
+                 font-size: 1.6em; /* Ajuste para móviles */
+             }
+        }
+    </style>
+<style type="text/css">
+.grande { font-size: 60px; }
+</style>
+<script>
+// Escribir aqui el código Javascript
+</script>
+</head>
+<body>
+
+    <div id="game-container">
+        <h1>Crypto Collector</h1>
+        <div id="status">Score: 0 | Lives: 3</div>
+        <canvas id="game-area" width="400" height="550"></canvas> <div id="game-over-message">¡GAME OVER!</div>
+        <div id="level-message">Nivel 1</div> <button id="start-button">Start Game</button>
+
+        <audio id="collect-sound" src="put_your_collect_sound_url_here.mp3"></audio>
+        <audio id="lose-life-sound" src="put_your_lose_life_sound_url_here.mp3"></audio>
+
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game-area');
+        const ctx = canvas.getContext('2d');
+        const statusDisplay = document.getElementById('status');
+        const startButton = document.getElementById('start-button');
+        const gameOverMessage = document.getElementById('game-over-message');
+        const levelMessage = document.getElementById('level-message');
+        const collectSound = document.getElementById('collect-sound');
+        const loseLifeSound = document.getElementById('lose-life-sound');
+
+
+        let gameLoopId;
+        let score = 0; // Score in collected BITCOIN units
+        let lives = 3;
+        let isGameOver = false;
+
+        // Player (Wallet/Miner)
+        const playerWidth = 60;
+        const playerHeight = 30;
+        let playerX = (canvas.width - playerWidth) / 2;
+        const playerY = canvas.height - playerHeight - 20;
+        const playerSpeed = 7;
+        let moveLeft = false;
+        let moveRight = false;
+        let playerHitTimer = 0;
+
+        // Items (Crypto Names)
+        const itemTypes = ['BITCOIN', 'ETHEREUM', 'DOGE', 'ADA', 'XRP', 'SOL', 'LTC', 'BCH', 'DOT', 'UNI', 'LINK'];
+        const goodItemType = 'BITCOIN';
+
+        let items = [];
+        let currentItemSpeed;
+        let itemSpawnRate;
+        let lastSpawnTime = 0;
+        let lastFrameTime = performance.now();
+
+
+        // --- DIFICULTAD POR SCORE ---
+        const difficultyLevels = [
+            { scoreThreshold: 0, speed: 1.5, spawnRate: 1500 }, // Nivel 1: Muy fácil
+            { scoreThreshold: 10, speed: 2, spawnRate: 1200 },  // Nivel 2
+            { scoreThreshold: 30, speed: 2.5, spawnRate: 1000 }, // Nivel 3
+            { scoreThreshold: 60, speed: 3, spawnRate: 800 },   // Nivel 4
+            { scoreThreshold: 100, speed: 3.5, spawnRate: 600 }, // Nivel 5
+            { scoreThreshold: 150, speed: 4, spawnRate: 500 },  // Nivel 6
+            { scoreThreshold: 250, speed: 4.5, spawnRate: 400 }, // Nivel 7
+            { scoreThreshold: 400, speed: 5, spawnRate: 350 },  // Nivel 8
+            { scoreThreshold: 600, speed: 5.5, spawnRate: 300 },  // Nivel 9
+            { scoreThreshold: 900, speed: 6, spawnRate: 250 },   // Nivel 10
+        ];
+        let currentDifficultyLevelIndex = 0;
+
+
+        // Background Stars
+        const numStars = 150;
+        const stars = [];
+        let starTwinkleTimer = 0;
+
+
+        // Collision Particles (Simple effect)
+        let particles = [];
+
+
+        // --- Game Loop ---
+        function gameLoop(currentTime) {
+            const deltaTime = currentTime - lastFrameTime;
+            lastFrameTime = currentTime;
+
+            if (!isGameOver) {
+                 updatePlayerPosition();
+                 updateItems(deltaTime);
+                 checkCollisions();
+                 updateParticles(deltaTime); // Update particle positions/alphas
+
+                 draw(); // Draw everything
+
+                 gameLoopId = requestAnimationFrame(gameLoop); // Request next frame
+            }
+        }
+
+        // --- Initialization ---
+        function initGame() {
+            score = 0;
+            lives = 3;
+            isGameOver = false;
+            items = [];
+            particles = [];
+            playerX = (canvas.width - playerWidth) / 2;
+            moveLeft = false;
+            moveRight = false;
+            playerHitTimer = 0;
+            gameOverMessage.classList.remove('visible');
+            // levelMessage.classList.remove('visible'); // Managed by showLevelMessage timer
+
+
+            currentDifficultyLevelIndex = 0;
+            currentItemSpeed = difficultyLevels[0].speed;
+            itemSpawnRate = difficultyLevels[0].spawnRate;
+
+
+            if (stars.length === 0 || canvas.width !== stars.canvasWidth || canvas.height !== stars.canvasHeight) {
+                 stars.length = 0;
+                 for(let i = 0; i < numStars; i++){
+                     stars.push({
+                         x: Math.random() * canvas.width,
+                         y: Math.random() * canvas.height,
+                         radius: Math.random() * 1.5 + 0.5,
+                         alpha: Math.random() * 0.5 + 0.5,
+                         twinkleSpeed: Math.random() * 0.1 + 0.02
+                     });
+                 }
+                 stars.canvasWidth = canvas.width;
+                 stars.canvasHeight = canvas.height;
+            }
+
+
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+
+
+            updateStatus(); // Initial status display
+            startButton.disabled = true;
+            startButton.textContent = "Playing...";
+
+
+            lastFrameTime = performance.now();
+            gameLoopId = requestAnimationFrame(gameLoop);
+
+            console.log("Game Started! Level:", currentDifficultyLevelIndex + 1);
+            showLevelMessage();
+        }
+
+         // --- Show Level Up Message (Optional) ---
+         function showLevelMessage() {
+             if (showLevelMessage.timeoutId) {
+                 clearTimeout(showLevelMessage.timeoutId);
+             }
+
+             levelMessage.textContent = `Nivel ${currentDifficultyLevelIndex + 1}`;
+             levelMessage.classList.add('visible');
+
+             showLevelMessage.timeoutId = setTimeout(() => {
+                 levelMessage.classList.remove('visible');
+             }, 1500);
+         }
+
+
+        // --- Input Handling (Keyboard and Touch) ---
+
+        // Keyboard
+        document.addEventListener('keydown', (event) => {
+            if (isGameOver) return;
+            if (event.key === 'ArrowLeft' || event.key === 'a') {
+                moveLeft = true;
+            } else if (event.key === 'ArrowRight' || event.key === 'd') {
+                moveRight = true;
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            if (isGameOver) return;
+            if (event.key === 'ArrowLeft' || event.key === 'a') {
+                moveLeft = false;
+            } else if (event.key === 'ArrowRight' || event.key === 'd') {
+                moveRight = false;
+            }
+        });
+
+        // Touch Controls
+        canvas.addEventListener('touchstart', handleTouch);
+        canvas.addEventListener('touchmove', handleTouch);
+        canvas.addEventListener('touchend', handleTouchEnd);
+        canvas.addEventListener('touchcancel', handleTouchEnd);
+
+
+        function handleTouch(event) {
+            if (isGameOver) return;
+            event.preventDefault();
+
+            const rect = canvas.getBoundingClientRect();
+            const touchX = event.touches[0].clientX - rect.left;
+
+            if (touchX < canvas.width / 2) {
+                moveLeft = true;
+                moveRight = false;
+            } else {
+                moveRight = true;
+                moveLeft = false;
+            }
+        }
+
+        function handleTouchEnd(event) {
+             if (isGameOver) return;
+             // event.preventDefault();
+
+             moveLeft = false;
+             moveRight = false;
+        }
+
+
+        // --- Update Player Position ---
+        function updatePlayerPosition() {
+            if (moveLeft && playerX > 0) {
+                playerX -= playerSpeed;
+            }
+            if (moveRight && playerX < canvas.width - playerWidth) {
+                playerX += playerSpeed;
+            }
+            if(playerHitTimer > 0){
+                 playerHitTimer--;
+            }
+        }
+
+        // --- Update Items (Move Down and Spawn) ---
+        function updateItems(deltaTime) {
+            for (let i = items.length - 1; i >= 0; i--) {
+                items[i].y += items[i].speed * (deltaTime / 16.66);
+
+                if (items[i].y > canvas.height + items[i].height) {
+                    items.splice(i, 1);
+                }
+            }
+
+            lastSpawnTime += deltaTime;
+            if (lastSpawnTime > itemSpawnRate) {
+                generateItem();
+                lastSpawnTime -= itemSpawnRate;
+                if (lastSpawnTime < 0) lastSpawnTime = 0;
+            }
+        }
+
+        // --- Generate a new Item ---
+        function generateItem() {
+            const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
+
+            ctx.font = 'Bold 14px Arial';
+            const textMetrics = ctx.measureText(type);
+            const itemWidth = textMetrics.width + 15;
+            const itemHeight = 25;
+
+            const item = {
+                type: type,
+                x: Math.random() * (canvas.width - itemWidth),
+                y: -itemHeight,
+                speed: currentItemSpeed + Math.random() * (currentItemSpeed * 0.5),
+                width: itemWidth,
+                height: itemHeight
+            };
+            items.push(item);
+        }
+
+        // --- Add Particle Effect on Collision ---
+         function createParticles(x, y, color, count = 10) {
+             for (let i = 0; i < count; i++) {
+                 const angle = Math.random() * Math.PI * 2;
+                 const speed = Math.random() * 3 + 1;
+                 particles.push({
+                     x: x,
+                     y: y,
+                     color: color,
+                     speedX: Math.cos(angle) * speed,
+                     speedY: Math.sin(angle) * speed,
+                     size: Math.random() * 3 + 1,
+                     alpha: 1
+                 });
+             }
+         }
+
+         function updateParticles(deltaTime) {
+             for (let i = particles.length - 1; i >= 0; i--) {
+                 const p = particles[i];
+                 p.x += p.speedX;
+                 p.y += p.speedY;
+                 p.alpha -= 0.02; // Fade out
+                 p.size *= 0.95; // Shrink
+
+                 if (p.alpha <= 0.1 || p.size <= 0.5) {
+                     particles.splice(i, 1);
+                 }
+             }
+         }
+
+         function drawParticles() {
+             particles.forEach(p => {
+                 ctx.globalAlpha = p.alpha;
+                 ctx.fillStyle = p.color;
+                 ctx.beginPath();
+                 ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                 ctx.fill();
+             });
+             ctx.globalAlpha = 1;
+         }
+
+
+        // --- Check for Collisions ---
+        function checkCollisions() {
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+
+                if (playerX < item.x + item.width &&
+                    playerX + playerWidth > item.x &&
+                    playerY < item.y + item.height &&
+                    playerY + playerHeight > item.y) {
+
+                    const collisionX = item.x + item.width / 2;
+                    const collisionY = item.y + item.height;
+
+
+                    if (item.type === goodItemType) {
+                        score += 1;
+
+                        if (currentDifficultyLevelIndex < difficultyLevels.length - 1 && score >= difficultyLevels[currentDifficultyLevelIndex + 1].scoreThreshold) {
+                             currentDifficultyLevelIndex++;
+                             currentItemSpeed = difficultyLevels[currentDifficultyLevelIndex].speed;
+                             itemSpawnRate = difficultyLevels[currentDifficultyLevelIndex].spawnRate;
+                             console.log("Level Up! New Level:", currentDifficultyLevelIndex + 1);
+                             showLevelMessage();
+                        }
+
+                         createParticles(collisionX, collisionY, '#FFD700', 15);
+
+
+                         if (collectSound && collectSound.readyState >= 2) {
+                             collectSound.currentTime = 0;
+                             collectSound.play().catch(e => console.error("Collect sound error:", e));
+                         }
+
+                    } else {
+                        lives -= 1;
+                         playerHitTimer = 30;
+
+                         createParticles(collisionX, collisionY, '#FF0000', 20);
+
+
+                         if (loseLifeSound && loseLifeSound.readyState >= 2) {
+                             loseLifeSound.currentTime = 0;
+                             loseLifeSound.play().catch(e => console.error("Lose life sound error:", e));
+                         }
+                    }
+
+                    items.splice(i, 1);
+                    updateStatus(); // Update status after score/lives change
+
+                    if (lives <= 0) {
+                        endGame();
+                        break;
+                    }
+                }
+            }
+        }
+
+        // --- Draw Background (Stars and Text) ---
+        function drawStars() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Stars
+            ctx.fillStyle = '#fff';
+            starTwinkleTimer += 0.01;
+            stars.forEach(star => {
+                star.alpha = Math.sin(star.twinkleSpeed * starTwinkleTimer + star.x * 0.1) * 0.5 + 0.5;
+
+                ctx.globalAlpha = star.alpha;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+
+            // --- Draw Background Text "TIENDA CRYPTO ECUADOR" ---
+            const bgText = "TIENDA CRYPTO ECUADOR";
+            ctx.font = 'italic bold 25px Georgia, serif'; // Tamaño ajustado
+            ctx.shadowColor = 'rgba(255, 215, 0, 0.5)';
+            ctx.shadowBlur = 5;
+
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.25)';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            const textX = canvas.width / 2;
+            const textY = canvas.height * 0.75;
+
+            ctx.fillText(bgText, textX, textY);
+
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+        }
+
+        // --- Draw Player ---
+        function drawPlayer() {
+            ctx.fillStyle = playerHitTimer > 0 ? '#ff0000' : '#FFD700';
+            ctx.beginPath();
+            ctx.moveTo(playerX, playerY + playerHeight);
+            ctx.lineTo(playerX + playerWidth, playerY + playerHeight);
+            ctx.lineTo(playerX + playerWidth - 10, playerY);
+            ctx.lineTo(playerX + 10, playerY);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.font = 'Bold 12px Arial';
+            ctx.fillStyle = playerHitTimer > 0 ? '#fff' : '#4B3B02';
+            ctx.textAlign = 'center';
+            ctx.fillText('WALLET', playerX + playerWidth / 2, playerY + playerHeight / 2 + 4);
+
+        }
+
+        // --- Draw Items ---
+        function drawItem(item) {
+            if (item.type === goodItemType) {
+                ctx.fillStyle = '#f7931a';
+                ctx.strokeStyle = '#e37a0a';
+            } else {
+                ctx.fillStyle = '#667deb';
+                ctx.strokeStyle = '#4c5cd6';
+            }
+
+            const radius = 5;
+             ctx.beginPath();
+             ctx.moveTo(item.x + radius, item.y);
+             ctx.lineTo(item.x + item.width - radius, item.y);
+             ctx.arcTo(item.x + item.width, item.y, item.x + item.width, item.y + radius, radius);
+             ctx.lineTo(item.x + item.width, item.y + item.height - radius);
+             ctx.arcTo(item.x + item.width, item.y + item.height, item.x + item.width - radius, item.y + item.height, radius);
+             ctx.lineTo(item.x + radius, item.y + item.height);
+             ctx.arcTo(item.x, item.y + item.height, item.x, item.y + item.height - radius, radius);
+             ctx.lineTo(item.x, item.y + radius);
+             ctx.arcTo(item.x, item.y, item.x + radius, item.y, radius);
+             ctx.closePath();
+             ctx.fill();
+             ctx.lineWidth = 2;
+             ctx.stroke();
+
+
+            ctx.font = 'Bold 14px Arial';
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(item.type, item.x + item.width / 2, item.y + item.height / 2);
+        }
+
+
+        // --- Draw Everything (main draw function) ---
+        function draw() {
+            drawStars();
+            drawPlayer();
+            items.forEach(item => drawItem(item));
+            drawParticles();
+        }
+
+        // --- Update Status Display ---
+        function updateStatus() {
+            // Convert score (units) to satoshis
+            const satoshiScore = score * 100000000;
+            statusDisplay.textContent = `Score: ${satoshiScore} sats | Lives: ${lives}`;
+        }
+
+        // --- End Game ---
+        function endGame() {
+            isGameOver = true;
+            cancelAnimationFrame(gameLoopId);
+
+            gameOverMessage.classList.add('visible');
+            levelMessage.classList.remove('visible');
+            startButton.disabled = false;
+            startButton.textContent = "Play Again";
+
+            console.log("Game Over! Final Score:", score);
+        }
+
+        // --- Event Listener for Start Button ---
+        startButton.addEventListener('click', initGame);
+
+
+        // --- Draw Start Screen ---
+         function drawStartScreen(){
+             canvas.width = canvas.offsetWidth;
+             canvas.height = canvas.offsetHeight;
+
+             ctx.clearRect(0, 0, canvas.width, canvas.height);
+             drawStars();
+
+             const startPlayerY = canvas.height - playerHeight - 80;
+             ctx.fillStyle = '#FFD700';
+             ctx.beginPath();
+             ctx.moveTo(canvas.width/2 - playerWidth/2, startPlayerY + playerHeight);
+             ctx.lineTo(canvas.width/2 + playerWidth/2, startPlayerY + playerHeight);
+             ctx.lineTo(canvas.width/2 + playerWidth/2 - 10, startPlayerY);
+             ctx.lineTo(canvas.width/2 - playerWidth/2 + 10, startPlayerY);
+             ctx.closePath();
+             ctx.fill();
+
+             ctx.font = 'Bold 12px Arial';
+             ctx.fillStyle = '#4B3B02';
+             ctx.textAlign = 'center';
+             ctx.fillText('WALLET', canvas.width / 2, startPlayerY + playerHeight / 2 + 4);
+
+
+             ctx.font = '22px Arial';
+             ctx.fillStyle = '#c5c6c7';
+             ctx.textAlign = 'center';
+             ctx.fillText('Collect BITCOIN', canvas.width / 2, canvas.height / 2 - 50);
+             ctx.font = '18px Arial';
+             ctx.fillStyle = '#f7931a';
+             ctx.fillText('BITCOIN', canvas.width / 2, canvas.height / 2 - 20);
+              ctx.font = '18px Arial';
+             ctx.fillStyle = '#667deb';
+             ctx.fillText('ETHEREUM, DOGE, etc.', canvas.width / 2, canvas.height / 2 - 10);
+             ctx.font = '22px Arial';
+             ctx.fillStyle = '#c5c6c7';
+             ctx.fillText('Avoid Others!', canvas.width / 2, canvas.height / 2 + 20);
+             ctx.font = '18px Arial';
+             ctx.fillText('Touch Left / Right Half', canvas.width / 2, canvas.height / 2 + 60);
+
+
+         }
+        document.addEventListener('DOMContentLoaded', drawStartScreen);
+
+
+    </script>
+
+
+
+</body></html>
