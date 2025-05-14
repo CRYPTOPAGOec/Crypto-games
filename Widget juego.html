@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Crypto Shooter Widget</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #111; /* Fondo del body dentro del iframe */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #gameArea {
+            /* --- TAMAÑO BASE AJUSTADO --- */
+            width: 300px; /* Nuevo ancho base */
+            height: 450px; /* Nuevo alto base */
+            /* -------------------------- */
+            max-width: 95vw;
+            max-height: 95vh;
+            aspect-ratio: 4 / 6; /* Mantiene la proporción */
+            flex-shrink: 0; /* Evita que se encoja más de lo necesario en flex */
+
+
+            border: 3px solid;
+            border-image: linear-gradient(45deg, #00ffff, #ff00ff) 1;
+            background: radial-gradient(circle at center, #0a0a2a 0%, #000 100%);
+            position: relative;
+            overflow: hidden;
+            color: white;
+            box-sizing: border-box;
+        }
+
+        /* --- Texto de Fondo Elegante --- */
+        #backgroundText {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-8deg);
+            color: rgba(200, 200, 200, 0.07);
+            font-family: 'Georgia', serif;
+            /* font-size escalado por JS */
+            font-weight: normal;
+            white-space: nowrap;
+            user-select: none;
+            pointer-events: none; /* Permite clics/toques a través */
+            z-index: 1;
+            text-align: center;
+            width: 100%;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+            letter-spacing: 2px;
+        }
+
+        /* Ajuste de tamaño de fuente del fondo para que no sea GIGANTE en base pequeña */
+        @media (max-width: 350px) {
+             #backgroundText {
+                 font-size: 1.5em !important;
+                 transform: translate(-50%, -50%) rotate(-5deg);
+             }
+        }
+
+
+        #player {
+            width: 40px; /* Tamaños base, escalados por JS */
+            height: 40px;
+            background: linear-gradient(to top, #00ffff, #008888);
+            position: absolute;
+            bottom: 20px; /* Posición base, escalada por JS */
+            left: calc(50% - 20px); /* Posición base, ajustada por JS */
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+            transition: left 0.05s linear;
+            z-index: 5;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.8), 0 0 25px rgba(0, 255, 255, 0.5);
+        }
+
+        .enemy {
+            width: 40px; /* Tamaños base, escalados por JS */
+            height: 40px;
+            background-color: rgba(255, 0, 255, 0.8);
+            color: white;
+            text-align: center;
+            line-height: 40px; /* Base line-height, escalado por JS */
+            position: absolute;
+            font-size: 20px; /* Base font-size, escalado por JS */
+            font-weight: bold;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+            z-index: 4;
+        }
+
+
+        .projectile {
+            width: 6px; /* Tamaños base, escalados por JS */
+            height: 20px;
+            background-color: yellow;
+            position: absolute;
+            z-index: 4;
+            box-shadow: 0 0 15px yellow, 0 0 25px yellow, 0 0 40px yellow;
+        }
+
+        #score {
+            position: absolute;
+            top: 10px; /* Posición base, escalada por JS */
+            left: 10px; /* Posición base, escalada por JS */
+            color: white;
+            font-size: 1.4em; /* Base font-size, escalado por JS */
+            z-index: 10;
+            font-family: 'Georgia', serif;
+            text-shadow: 1px 1px 3px black;
+        }
+
+        #gameOver {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            font-size: 2.5em; /* Base font-size, escalado por JS */
+            text-align: center;
+            z-index: 20;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding-top: 0;
+            font-family: 'Georgia', serif;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+        }
+
+        #finalScore {
+             margin-top: 20px;
+             font-size: 0.6em; /* Este es relativo al #gameOver escalado */
+             color: #ddd;
+        }
+
+         #gameOver button {
+            margin-top: 30px;
+            padding: 12px 25px;
+            font-size: 0.7em; /* Este es relativo al #gameOver escalado */
+            cursor: pointer;
+            background: linear-gradient(to right, #00ffff, #ff00ff);
+            border: none;
+            border-radius: 25px;
+            color: black;
+            touch-action: manipulation;
+            text-transform: uppercase;
+            font-weight: bold;
+            transition: transform 0.2s ease;
+         }
+         #gameOver button:active {
+            transform: scale(0.95);
+         }
+
+
+        /* --- Controles Táctiles (Fijos en la ventana del IFRAME) --- */
+        #controls {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 30;
+            max-width: 420px; /* Limitar ancho para ventanas grandes */
+            margin: 0 auto; /* Centrar si el ancho es menor que la ventana */
+        }
+
+        #controls div {
+            /* Tamaños base para botones táctiles */
+            width: 70px;
+            height: 70px;
+            background-color: rgba(50, 50, 50, 0.7);
+            color: white;
+            text-align: center;
+            line-height: 70px; /* Ajustar si cambias width/height */
+            font-size: 2em; /* Ajustar si cambias width/height */
+            font-weight: bold;
+            border-radius: 50%;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+         #fireButton {
+            width: 90px;
+            height: 90px;
+            line-height: 90px; /* Ajustar si cambias width/height */
+            font-size: 1.5em; /* Ajustar si cambias width/height */
+            background-color: rgba(255, 0, 0, 0.7);
+            border-radius: 50%;
+             box-shadow: 0 0 15px rgba(255, 0, 0, 0.6);
+        }
+
+        /* Feedback visual al presionar */
+        #controls div:active {
+             background-color: rgba(255, 255, 255, 0.9);
+             color: black;
+             box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+             transform: scale(0.95);
+        }
+         #fireButton:active {
+             background-color: rgba(0, 255, 0, 0.9);
+             color: black;
+             box-shadow: 0 0 15px rgba(0, 255, 0, 0.8);
+             transform: scale(0.95);
+         }
+
+         /* Ocultar controles en pantallas grandes donde se usa teclado */
+         /* NOTA: Esto ocultará los controles DENTRO del iframe. */
+         /* Si el IFRAME es pequeño, no se ocultarán aunque la ventana principal sea grande. */
+         /* Esto está bien para la mayoría de los casos de uso de widget. */
+         @media (min-width: 768px) {
+             #controls {
+                 display: none;
+             }
+         }
+
+    </style>
+<style type="text/css">
+.grande { font-size: 60px; }
+</style>
+<script>
+// Escribir aqui el código Javascript
+</script>
+</head>
+<body>
+
+    <div id="gameArea">
+         <div id="backgroundText">TIENDA CRYPTO ECUADOR</div>
+
+        <div id="player"></div>
+        <div id="score">Score: 0</div>
+        <div id="gameOver">
+            GAME OVER!
+            <div id="finalScore"></div>
+            <button id="restartButton">Restart</button>
+        </div>
+        </div>
+
+    <div id="controls">
+        <div id="leftButton"> ◀ </div>
+        <div id="fireButton"> FIRE </div>
+        <div id="rightButton"> ▶ </div>
+    </div>
+
+
+    <script>
+        const gameArea = document.getElementById('gameArea');
+        const player = document.getElementById('player');
+        const scoreDisplay = document.getElementById('score');
+        const gameOverScreen = document.getElementById('gameOver');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const restartButton = document.getElementById('restartButton');
+        const backgroundText = document.getElementById('backgroundText');
+
+        // Asegurarse de que los botones de control existen (importante si la media query los oculta)
+        // Podríamos necesitar referenciarlos de forma segura
+        const leftButton = document.getElementById('leftButton');
+        const rightButton = document.getElementById('rightButton');
+        const fireButton = document.getElementById('fireButton');
+
+
+        // --- Base Constants (Basado en el diseño original 400x600) ---
+        // Estas constantes NO cambian, representan el diseño original de referencia.
+        const baseGameAreaWidth = 400;
+        const baseGameAreaHeight = 600;
+
+        const basePlayerSize = 40;
+        const basePlayerSpeed = 5;
+        const basePlayerBottom = 20;
+
+        const baseProjectileWidth = 6;
+        const baseProjectileHeight = 20;
+        const baseProjectileSpeed = 7;
+
+        const baseEnemySize = 40;
+        const baseEnemySpeed = 0.5;
+        const baseEnemySpawnInterval = 2000;
+
+        const baseScoreFontSize = 1.4; // in em
+        const baseGameOverFontSize = 2.5; // in em
+        const baseBackgroundTextFontSize = 3.5; // in em
+        const baseControlFontSize = 2; // in em
+        const baseFireButtonFontSize = 1.5; // in em
+        const baseControlSize = 70; // Base size for left/right buttons
+        const baseFireButtonSize = 90; // Base size for fire button
+
+
+        let score = 0;
+        let playerSpeed;
+        let projectileSpeed;
+        let enemySpeed;
+
+        let enemies = [];
+        let projectiles = [];
+        let gameInterval;
+        let spawnIntervalTimer;
+
+        let isGameOver = false;
+        let isMovingLeft = false;
+        let isMovingRight = false;
+
+        let canShoot = true;
+        const shootCooldown = 300;
+
+        let scaleFactor = 1;
+
+
+        // --- Scaling Function ---
+        function resizeGameElements() {
+            // Calculate scale factor based on current game area width vs the ORIGINAL base width (400)
+            scaleFactor = gameArea.offsetWidth / baseGameAreaWidth;
+
+            // Scale player size and initial position
+            player.style.width = `${basePlayerSize * scaleFactor}px`;
+            player.style.height = `${basePlayerSize * scaleFactor}px`;
+            player.style.bottom = `${basePlayerBottom * scaleFactor}px`;
+
+            // Scale speeds
+            playerSpeed = basePlayerSpeed * scaleFactor;
+            projectileSpeed = baseProjectileSpeed * scaleFactor;
+            enemySpeed = baseEnemySpeed * scaleFactor;
+
+            // Scale font sizes
+            scoreDisplay.style.fontSize = `${baseScoreFontSize * scaleFactor}em`;
+            gameOverScreen.style.fontSize = `${baseGameOverFontSize * scaleFactor}em`;
+            if (finalScoreDisplay) {
+                finalScoreDisplay.style.fontSize = `${baseGameOverFontSize * scaleFactor * 0.6}em`;
+            }
+             if (backgroundText) {
+                backgroundText.style.fontSize = `${baseBackgroundTextFontSize * scaleFactor}em`;
+             }
+
+
+            // Scale control button font sizes and line heights IF the controls div exists and is visible
+             // Need to check if leftButton exists because the media query might hide the controls div entirely
+            if (leftButton) {
+                leftButton.style.fontSize = `${baseControlFontSize * scaleFactor}em`;
+                // Recalcular line-height basado en la altura actual después de escalar
+                leftButton.style.lineHeight = `${leftButton.offsetHeight}px`;
+            }
+             if (rightButton) {
+                rightButton.style.fontSize = `${baseControlFontSize * scaleFactor}em`;
+                rightButton.style.lineHeight = `${rightButton.offsetHeight}px`;
+             }
+             if (fireButton) {
+                fireButton.style.fontSize = `${baseFireButtonFontSize * scaleFactor}em`;
+                fireButton.style.lineHeight = `${fireButton.offsetHeight}px`;
+             }
+
+
+            // Scale existing enemies and projectiles
+            enemies.forEach(enemy => {
+                const currentEnemyWidth = baseEnemySize * scaleFactor;
+                const currentEnemyHeight = baseEnemySize * scaleFactor;
+                enemy.element.style.width = `${currentEnemyWidth}px`;
+                enemy.element.style.height = `${currentEnemyHeight}px`;
+                 enemy.element.style.lineHeight = `${currentEnemyHeight}px`;
+
+                 // Re-calculate and set top/left based on current scaled factor
+                 const currentRelativeLeft = parseFloat(enemy.element.style.left) / baseGameAreaWidth; // Position relative to original base width
+                 const currentRelativeTop = parseFloat(enemy.element.style.top) / baseGameAreaHeight; // Position relative to original base height
+
+                 enemy.element.style.left = `${currentRelativeLeft * gameArea.offsetWidth}px`; // Apply to new actual width
+                 enemy.element.style.top = `${currentRelativeTop * gameArea.offsetHeight}px`; // Apply to new actual height
+
+                 enemy.width = currentEnemyWidth; // Update stored scaled size
+                 enemy.height = currentEnemyHeight;
+            });
+
+             projectiles.forEach(p => {
+                 const currentProjectileWidth = baseProjectileWidth * scaleFactor;
+                 const currentProjectileHeight = baseProjectileHeight * scaleFactor;
+                 p.element.style.width = `${currentProjectileWidth}px`;
+                 p.element.style.height = `${currentProjectileHeight}px`;
+
+                 const currentRelativeLeft = parseFloat(p.element.style.left) / baseGameAreaWidth;
+                 const currentRelativeTop = parseFloat(p.element.style.top) / baseGameAreaHeight;
+
+                 p.element.style.left = `${currentRelativeLeft * gameArea.offsetWidth}px`;
+                 p.element.style.top = `${currentRelativeTop * gameArea.offsetHeight}px`;
+
+                 p.width = currentProjectileWidth;
+                 p.height = currentProjectileHeight;
+             });
+
+
+        }
+
+
+        // --- Símbolos de criptomonedas (solo texto) ---
+        const cryptoSymbols = ['BTC', 'ETH', 'DOGE', 'SOL', 'ADA', 'XRP', 'LTC', 'BNB', 'DOT', 'SHIB', 'AVAX', 'TRX', 'EOS', 'LINK', 'XLM', 'VET', 'ICP', 'BCH', 'ZEC'];
+
+
+        // --- Inicialización del juego ---
+        function initGame() {
+            score = 0;
+            scoreDisplay.textContent = `Score: ${score}`;
+            isGameOver = false;
+            gameOverScreen.style.display = 'none';
+            player.style.display = 'block';
+
+            enemies.forEach(enemy => enemy.element.remove());
+            projectiles.forEach(p => p.element.remove());
+            enemies = [];
+            projectiles = [];
+
+            // Aplicar escala inicial y posicionar elementos
+            resizeGameElements(); // Esto calcula scaleFactor y escala elementos base
+            player.style.left = `${gameArea.offsetWidth / 2 - player.offsetWidth / 2}px`; // Posicionar jugador centrado DESPUÉS de escalarlo
+
+            // Resetear velocidades y dificultad
+            enemySpeed = baseEnemySpeed * scaleFactor; // Asegurarse de que la velocidad inicial esté escalada
+            difficultyTimer = 0;
+
+            clearInterval(gameInterval);
+            clearInterval(spawnIntervalTimer);
+
+            gameInterval = setInterval(gameLoop, 1000 / 60);
+            spawnIntervalTimer = setInterval(spawnEnemy, baseEnemySpawnInterval);
+        }
+
+        // --- Bucle principal del juego ---
+        function gameLoop() {
+            if (isGameOver) return;
+
+            handlePlayerMovement();
+            moveElements();
+            checkCollisions();
+            checkGameOver();
+            updateDifficulty();
+        }
+
+         // --- Manejar movimiento del jugador basado en banderas ---
+         function handlePlayerMovement() {
+             let currentLeft = player.offsetLeft;
+
+             if (isMovingLeft) {
+                 currentLeft -= playerSpeed;
+             }
+             if (isMovingRight) {
+                 currentLeft += playerSpeed;
+             }
+
+             if (currentLeft < 0) {
+                 currentLeft = 0;
+             }
+             if (currentLeft > gameArea.offsetWidth - player.offsetWidth) {
+                  currentLeft = gameArea.offsetWidth - player.offsetWidth;
+             }
+
+             player.style.left = `${currentLeft}px`;
+         }
+
+
+        // --- Movimiento de elementos ---
+        function moveElements() {
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.y -= projectileSpeed;
+                p.element.style.top = `${p.y}px`;
+
+                if (p.y + p.height < 0) {
+                    p.element.remove();
+                    projectiles.splice(i, 1);
+                }
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                enemy.y += enemySpeed;
+                enemy.element.style.top = `${enemy.y}px`;
+            }
+        }
+
+        // --- Aparición de enemigos ---
+        function spawnEnemy() {
+             if (isGameOver) return;
+
+            const symbol = cryptoSymbols[Math.floor(Math.random() * cryptoSymbols.length)];
+
+            const enemyElement = document.createElement('div');
+            enemyElement.classList.add('enemy');
+
+            enemyElement.textContent = symbol;
+
+            // Aplicar escala actual al tamaño inicial y posicion
+            const enemyWidth = baseEnemySize * scaleFactor;
+            const enemyHeight = baseEnemySize * scaleFactor;
+
+            enemyElement.style.width = `${enemyWidth}px`;
+            enemyElement.style.height = `${enemyHeight}px`;
+            enemyElement.style.lineHeight = `${enemyHeight}px`;
+
+            const startX = Math.random() * (gameArea.offsetWidth - enemyWidth);
+            const startY = -enemyHeight;
+
+            enemyElement.style.left = `${startX}px`;
+            enemyElement.style.top = `${startY}px`;
+
+            gameArea.appendChild(enemyElement);
+
+            enemies.push({
+                element: enemyElement,
+                x: startX,
+                y: startY,
+                width: enemyWidth,
+                height: enemyHeight
+            });
+        }
+
+        // --- Disparar ---
+        function shoot() {
+             if (isGameOver) return;
+
+            const projectileElement = document.createElement('div');
+            projectileElement.classList.add('projectile');
+
+            // Aplicar escala actual al tamaño
+            const projectileWidth = baseProjectileWidth * scaleFactor;
+            const projectileHeight = baseProjectileHeight * scaleFactor;
+
+            projectileElement.style.width = `${projectileWidth}px`;
+            projectileElement.style.height = `${projectileHeight}px`;
+
+
+            // Posicion relativa al jugador, aplicar escala actual
+            const startX = player.offsetLeft + player.offsetWidth / 2 - projectileWidth / 2;
+            const startY = player.offsetTop - projectileHeight;
+
+            projectileElement.style.left = `${startX}px`;
+            projectileElement.style.top = `${startY}px`;
+
+            gameArea.appendChild(projectileElement);
+
+            projectiles.push({
+                element: projectileElement,
+                x: startX,
+                y: startY,
+                width: projectileWidth,
+                height: projectileHeight
+            });
+        }
+
+        // --- Detección de colisiones ---
+        function checkCollisions() {
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                const pRect = p.element.getBoundingClientRect();
+
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const enemy = enemies[j];
+                    const enemyRect = enemy.element.getBoundingClientRect();
+
+                    if (pRect.left < enemyRect.left + enemyRect.width &&
+                        pRect.left + pRect.width > enemyRect.left &&
+                        pRect.top < enemyRect.top + enemyRect.height &&
+                        pRect.top + pRect.height > enemyRect.top) {
+
+                        score += 10;
+                        scoreDisplay.textContent = `Score: ${score}`;
+
+                        enemy.element.remove();
+                        p.element.remove();
+
+                        enemies.splice(j, 1);
+                        projectiles.splice(i, 1);
+
+                        break;
+                    }
+                }
+            }
+
+             const playerRect = player.getBoundingClientRect();
+             for (let i = enemies.length - 1; i >= 0; i--) {
+                 const enemy = enemies[i];
+                 const enemyRect = enemy.element.getBoundingClientRect();
+
+                  if (playerRect.left < enemyRect.left + enemyRect.width &&
+                      playerRect.left + playerRect.width > enemyRect.left &&
+                      playerRect.top < enemyRect.top + enemyRect.height &&
+                      playerRect.top + playerRect.height > enemyRect.top) {
+
+                      endGame();
+                      return;
+                  }
+             }
+        }
+
+        // --- Comprobar Game Over ---
+        function checkGameOver() {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                 const enemyRect = enemy.element.getBoundingClientRect();
+                 const gameAreaRect = gameArea.getBoundingClientRect();
+
+                if (enemyRect.top >= gameAreaRect.bottom - enemyRect.height) {
+                    endGame();
+                    return;
+                }
+            }
+        }
+
+        // --- Terminar juego ---
+        function endGame() {
+            isGameOver = true;
+            clearInterval(gameInterval);
+            clearInterval(spawnIntervalTimer);
+
+            finalScoreDisplay.textContent = `Your Final Score: ${score}`;
+            gameOverScreen.style.display = 'flex';
+            player.style.display = 'none';
+             isMovingLeft = false;
+             isMovingRight = false;
+        }
+
+        // --- Aumentar dificultad (Opcional) ---
+        let difficultyTimer = 0;
+        const difficultyIncreaseInterval = 15000;
+        const baseDifficultyIncreaseAmount = 0.1;
+        let difficultyIncreaseAmount;
+
+        function updateDifficulty() {
+             if (!isGameOver) {
+                 difficultyTimer += (1000 / 60);
+                 if (difficultyTimer >= difficultyIncreaseInterval) {
+                     difficultyIncreaseAmount = baseDifficultyIncreaseAmount * scaleFactor;
+                     enemySpeed += difficultyIncreaseAmount;
+
+                     difficultyTimer = 0;
+                     console.log("Difficulty increased! Enemy speed:", enemySpeed);
+                 }
+             }
+        }
+
+
+        // --- Event Listeners ---
+
+        // Eventos de Teclado
+        document.addEventListener('keydown', (event) => {
+            if (isGameOver) return;
+            if (event.key === 'ArrowLeft') {
+                isMovingLeft = true;
+            } else if (event.key === 'ArrowRight') {
+                isMovingRight = true;
+            } else if (event.key === ' ') {
+                if (canShoot) {
+                     shoot();
+                     canShoot = false;
+                     setTimeout(() => canShoot = true, shootCooldown);
+                 }
+                 event.preventDefault();
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+             if (isGameOver) return;
+            if (event.key === 'ArrowLeft') {
+                isMovingLeft = false;
+            } else if (event.key === 'ArrowRight') {
+                isMovingRight = false;
+            }
+        });
+
+        // Eventos de Botones Táctiles (y Mouse)
+        // Asegurarse de que los botones existen antes de añadir listeners
+        if(leftButton) {
+            leftButton.addEventListener('touchstart', (e) => { isMovingLeft = true; e.preventDefault(); });
+            leftButton.addEventListener('touchend', (e) => { isMovingLeft = false; e.preventDefault(); });
+            leftButton.addEventListener('mousedown', (e) => { isMovingLeft = true; e.preventDefault(); });
+            leftButton.addEventListener('mouseup', (e) => { isMovingRight = false; e.preventDefault(); }); // Corregido: Debería ser isMovingLeft = false
+             leftButton.addEventListener('mouseleave', (e) => { isMovingLeft = false; });
+        }
+         if(rightButton) {
+            rightButton.addEventListener('touchstart', (e) => { isMovingRight = true; e.preventDefault(); });
+            rightButton.addEventListener('touchend', (e) => { isMovingRight = false; e.preventDefault(); });
+            rightButton.addEventListener('mousedown', (e) => { isMovingRight = true; e.preventDefault(); });
+            rightButton.addEventListener('mouseup', (e) => { isMovingRight = false; e.preventDefault(); });
+             rightButton.addEventListener('mouseleave', (e) => { isMovingRight = false; });
+         }
+         if(fireButton) {
+            fireButton.addEventListener('touchstart', (e) => {
+                if (canShoot) {
+                    shoot();
+                    canShoot = false;
+                    setTimeout(() => canShoot = true, shootCooldown);
+                }
+                e.preventDefault();
+            });
+            fireButton.addEventListener('touchend', (e) => { e.preventDefault(); });
+            fireButton.addEventListener('mousedown', (e) => {
+                 if (canShoot) {
+                    shoot();
+                    canShoot = false;
+                    setTimeout(() => canShoot = true, shootCooldown);
+                }
+                 e.preventDefault();
+            });
+             fireButton.addEventListener('mouseup', (e) => { });
+         }
+
+
+        if(restartButton) {
+             restartButton.addEventListener('click', initGame);
+        }
+
+
+        // --- Handle window resize ---
+        window.addEventListener('resize', resizeGameElements);
+
+
+        // --- Iniciar el juego al cargar la página ---
+        // Asegurarse de que el DOM esté completamente cargado antes de iniciar
+        document.addEventListener('DOMContentLoaded', () => {
+            // Comprobar si estamos dentro de un iframe (opcional pero útil)
+             if (window.parent !== window) {
+                 document.body.classList.add('is-in-iframe');
+             }
+             initGame();
+         });
+
+
+        // Corregir un pequeño error de copy-paste en el listener del botón izquierdo
+        // Asegurarse de que isMovingLeft se pone en false al soltar el botón izquierdo del ratón
+         if (leftButton) {
+             leftButton.removeEventListener('mouseup', (e) => { isMovingRight = false; e.preventDefault(); }); // Remover el incorrecto si se añadió antes
+             leftButton.addEventListener('mouseup', (e) => { isMovingLeft = false; e.preventDefault(); }); // Añadir el correcto
+         }
+
+
+    </script>
+
+
+
+
+</body></html>
