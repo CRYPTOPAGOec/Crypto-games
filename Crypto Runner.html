@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Crypto Runner Ultimate (Corregido)</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; background-color: #121212; -webkit-tap-highlight-color: transparent;}
+        #gameCanvas { display: block; }
+        .ui-overlay {
+            position: absolute;
+            color: white;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 10px;
+            background-color: rgba(30, 30, 45, 0.85);
+            box-sizing: border-box;
+            user-select: none; /* Evitar selección de texto en UI */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none; /* Default to no interaction */
+        }
+        .ui-overlay.visible {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto; /* Allow interaction when visible */
+        }
+        #startScreen {
+            top: 0; left: 0; width: 100%; height: 100%; border-radius: 0;
+        }
+        #startScreen h1 { font-size: clamp(32px, 8vw, 50px); color: #00e676; margin-bottom: 15px;}
+        #startScreen p { font-size: clamp(16px, 4vw, 22px); margin-bottom: 30px;}
+        #startScreen button, #pauseScreen button, #gameOverScreen button {
+            padding: clamp(12px, 3vw, 15px) clamp(20px, 5vw, 30px);
+            font-size: clamp(18px, 4.5vw, 22px);
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            transition: background-color 0.2s ease-out, transform 0.1s ease-in-out;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+        }
+        #startScreen button:active, #pauseScreen button:active, #gameOverScreen button:active {
+            transform: translateY(1px);
+        }
+        .game-ui-element { /* Para elementos visibles durante el juego */
+            position: absolute;
+            color: white;
+            text-shadow: 1px 1px 2px black;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background-color: rgba(20, 20, 30, 0.5);
+            font-size: clamp(16px, 3.5vw, 24px);
+            transition: opacity 0.3s ease-out;
+        }
+        #scoreBoard { top: 15px; left: 15px; }
+        #highScoreDisplay { top: 15px; right: 15px; font-size: clamp(14px, 3vw, 18px); }
+        #pauseButton {
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 15px;
+            font-size: clamp(14px, 3vw, 18px);
+            background-color: rgba(255, 165, 0, 0.8); /* Naranja */
+            border: none;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            display: none; /* Oculto hasta que empiece el juego */
+            opacity: 0; /* Para transición con game-ui-element */
+        }
+        #pauseScreen { top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.95); width: clamp(280px, 70vw, 400px); }
+        #pauseScreen h2 { font-size: clamp(28px, 7vw, 40px); color: #ffab00; margin-bottom: 25px;}
+        #gameOverScreen { top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.95); width: clamp(300px, 85vw, 480px); }
+        #gameOverScreen h2 { font-size: clamp(28px, 7vw, 40px); color: #f44336; margin-bottom: 10px;}
+        #gameOverScreen p { font-size: clamp(18px, 4vw, 22px); margin: 10px 0;}
+        #newRecordText { color: #00e676; font-weight: bold; display: none; font-size: clamp(16px, 3.8vw, 20px); }
+    </style>
+</head><body>
+
+<div id="startScreen" class="ui-overlay visible">
+    <h1>Crypto Runner Ultimate</h1>
+    <p>¡Esquiva obstáculos y recoge cripto-monedas!</p>
+    <button id="startButton">Empezar Juego</button>
+    <p style="font-size: 0.8em; margin-top: 40px;">Móvil: Desliza | Teclado: Flechas/Espacio</p>
+</div>
+
+<div id="scoreBoard" class="game-ui-element" style="opacity:0;">Puntuación: 0</div>
+<div id="highScoreDisplay" class="game-ui-element" style="opacity:0;">Máx: 0</div>
+<button id="pauseButton" class="game-ui-element">Pausa</button>
+
+<div id="pauseScreen" class="ui-overlay">
+    <h2>PAUSA</h2>
+    <button id="resumeButton">Reanudar</button>
+</div>
+
+<div id="gameOverScreen" class="ui-overlay">
+    <h2>¡FIN DEL JUEGO!</h2>
+    <p>Puntuación Final: <span id="finalScore">0</span></p>
+    <p id="newRecordText">¡NUEVO RÉCORD!</p>
+    <p style="font-size: clamp(16px, 3.5vw, 20px);">Máxima Histórica: <span id="finalHighScore">0</span></p>
+    <button id="restartButton">Reintentar</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+    // --- Estados del Juego ---
+    const GAME_STATE = {
+        PRE_GAME: 'PRE_GAME',
+        PLAYING: 'PLAYING',
+        PAUSED: 'PAUSED',
+        GAME_OVER: 'GAME_OVER'
+    };
+    let currentGameState = GAME_STATE.PRE_GAME;
+
+    // --- Escena y Renderizado ---
+    let scene, camera, renderer;
+    let animationFrameId;
+
+    // --- Jugador ---
+    let player, playerVelocityY = 0, playerIsJumping = false, playerTargetScale;
+    const playerBoundingBox = new THREE.Box3();
+    const playerDefaultMaterialColor = 0x00aaff; 
+    const playerHitMaterialColor = 0xff3333;
+    const playerGeometry = new THREE.BoxGeometry(0.8, 1.2, 0.8);
+    const playerMaterial = new THREE.MeshStandardMaterial({ color: playerDefaultMaterialColor, roughness: 0.3, metalness: 0.2 });
+    const jumpStrength = 0.38;
+    const gravity = 0.016;
+    const groundY = -1.5;
+    const lanePositions = [-2.3, 0, 2.3];
+    let currentPlayerLane = 1;
+    const playerLaneChangeSpeed = 0.25;
+
+    // --- Puntuación y Dificultad ---
+    let score = 0;
+    let highScore = 0;
+    let initialSpawnInterval = 1500; 
+    let minSpawnInterval = 400; 
+    let currentSpawnInterval;
+    let lastSpawnTime = 0;
+    let initialGameSpeed = 0.075; 
+    let maxGameSpeed = 0.20; 
+    let currentGameSpeed;
+
+    // --- Items y Partículas ---
+    let gameItems = [];
+    let activeParticles = [];
+    const coinGeometry = new THREE.CylinderGeometry(0.35, 0.35, 0.15, 16);
+    const coinMaterial = new THREE.MeshStandardMaterial({ color: 0xFFEB3B, emissive: 0xddc500, roughness: 0.4, metalness: 0.1 });
+    const obstacleMaterial = new THREE.MeshStandardMaterial({ color: 0xF44336, emissive: 0x992211, roughness: 0.5, metalness: 0.1 });
+
+    // --- UI Elements ---
+    let scoreBoardElement, highScoreElement, gameOverScreenElement, finalScoreElement, finalHighScoreElement;
+    let startScreenElement, startButton, pauseScreenElement, pauseButton, resumeButton, restartButton, newRecordTextElement;
+    
+    // --- Controles Táctiles ---
+    let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+    const swipeThresholdX = 30, swipeThresholdY = 25, tapMaxTime = 250;
+
+    // --- Screen Shake ---
+    let shakeDuration = 0, shakeIntensity = 0.05;
+
+
+    function initThreeJS() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1d1f2D); 
+        scene.fog = new THREE.Fog(0x1d1f2D, 10, 38); 
+
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 2.2, 7.0); 
+        camera.lookAt(0, 0.5, 0);
+
+        renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); 
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        directionalLight.position.set(6, 12, 9);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 1024;
+        directionalLight.shadow.mapSize.height = 1024;
+        directionalLight.shadow.camera.near = 1;
+        directionalLight.shadow.camera.far = 30;
+        directionalLight.shadow.camera.left = -12;
+        directionalLight.shadow.camera.right = 12;
+        directionalLight.shadow.camera.top = 12;
+        directionalLight.shadow.camera.bottom = -12;
+        scene.add(directionalLight);
+
+        const groundGeometry = new THREE.PlaneGeometry(30, 150);
+        const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.95 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = groundY - 0.6;
+        ground.receiveShadow = true;
+        scene.add(ground);
+        
+        player = new THREE.Mesh(playerGeometry, playerMaterial.clone()); // Clonar para evitar modificar la instancia original de material
+        player.castShadow = true;
+        playerTargetScale = new THREE.Vector3(1, 1, 1);
+        scene.add(player);
+    }
+
+    function cacheUIElements() {
+        scoreBoardElement = document.getElementById('scoreBoard');
+        highScoreElement = document.getElementById('highScoreDisplay');
+        gameOverScreenElement = document.getElementById('gameOverScreen');
+        finalScoreElement = document.getElementById('finalScore');
+        finalHighScoreElement = document.getElementById('finalHighScore');
+        startScreenElement = document.getElementById('startScreen');
+        startButton = document.getElementById('startButton');
+        pauseScreenElement = document.getElementById('pauseScreen');
+        pauseButton = document.getElementById('pauseButton');
+        resumeButton = document.getElementById('resumeButton');
+        restartButton = document.getElementById('restartButton');
+        newRecordTextElement = document.getElementById('newRecordText');
+    }
+
+    function setupEventListeners() {
+        startButton.addEventListener('click', startGame);
+        pauseButton.addEventListener('click', togglePause);
+        resumeButton.addEventListener('click', togglePause);
+        restartButton.addEventListener('click', startGame); 
+
+        document.addEventListener('keydown', onKeyDown);
+        window.addEventListener('resize', onWindowResize);
+
+        const gameCanvas = renderer.domElement;
+        gameCanvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        gameCanvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+    }
+    
+    function startGame() { 
+        resetGame();
+        currentGameState = GAME_STATE.PLAYING;
+        startScreenElement.classList.remove('visible');
+        gameOverScreenElement.classList.remove('visible');
+        pauseScreenElement.classList.remove('visible');
+        
+        scoreBoardElement.style.opacity = 1;
+        highScoreElement.style.opacity = 1;
+        pauseButton.style.display = 'block'; 
+        pauseButton.style.opacity = 1;
+
+
+        if (!animationFrameId) loop();
+    }
+
+    function resetGame() {
+        // gameIsOver ya no se usa, currentGameState maneja esto
+        score = 0;
+        updateScoreDisplay();
+        loadHighScore(); 
+
+        currentSpawnInterval = initialSpawnInterval;
+        currentGameSpeed = initialGameSpeed;
+        lastSpawnTime = performance.now();
+
+        gameItems.forEach(item => scene.remove(item));
+        gameItems = [];
+        activeParticles.forEach(p => { if(p.mesh) scene.remove(p.mesh); }); // Asegurarse que p.mesh exista
+        activeParticles = [];
+
+        currentPlayerLane = 1;
+        player.position.set(lanePositions[currentPlayerLane], groundY, 0);
+        player.rotation.set(0,0,0);
+        player.scale.set(1, 1, 1);
+        playerTargetScale.set(1, 1, 1);
+        player.material.color.setHex(playerDefaultMaterialColor);
+        playerIsJumping = false;
+        playerVelocityY = 0;
+        shakeDuration = 0; // Resetear screen shake
+
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        animationFrameId = null; 
+    }
+
+    function loadHighScore() {
+        highScore = parseInt(localStorage.getItem('cryptoRunnerHighScore')) || 0;
+        highScoreElement.textContent = `Máx: ${highScore}`;
+    }
+
+    function saveHighScore() {
+        const oldHighScore = highScore; // Guardar el high score antes de actualizar
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('cryptoRunnerHighScore', highScore);
+            return true; 
+        }
+        return false; 
+    }
+    
+    function togglePause() {
+        if (currentGameState === GAME_STATE.PLAYING) {
+            currentGameState = GAME_STATE.PAUSED;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+            pauseScreenElement.classList.add('visible');
+            pauseButton.textContent = 'Reanudar';
+        } else if (currentGameState === GAME_STATE.PAUSED) {
+            currentGameState = GAME_STATE.PLAYING;
+            lastSpawnTime = performance.now(); // Resetea el timer de spawn para evitar spawns masivos
+            pauseScreenElement.classList.remove('visible');
+            pauseButton.textContent = 'Pausa';
+            if (!animationFrameId) loop();
+        }
+    }
+
+    function onKeyDown(event) {
+        if (currentGameState === GAME_STATE.PRE_GAME && (event.code === 'Space' || event.code === 'Enter')) {
+            startGame();
+            return;
+        }
+        if (currentGameState !== GAME_STATE.PLAYING) return;
+        handlePlayerInput(event.code);
+    }
+
+    function handleTouchStart(event) {
+        event.preventDefault();
+        if (currentGameState === GAME_STATE.PRE_GAME) {
+             // Permitir que un toque en la pantalla de inicio comience el juego
+            startGame();
+            return;
+        }
+        if (currentGameState !== GAME_STATE.PLAYING || event.touches.length === 0) return;
+        touchStartX = event.touches[0].clientX;
+        touchStartY = event.touches[0].clientY;
+        touchStartTime = performance.now();
+    }
+
+    function handleTouchEnd(event) {
+        event.preventDefault();
+        if (currentGameState !== GAME_STATE.PLAYING || event.changedTouches.length === 0) return;
+
+        const touchEndX = event.changedTouches[0].clientX;
+        const touchEndY = event.changedTouches[0].clientY;
+        const deltaTime = performance.now() - touchStartTime;
+
+        const deltaX = touchEndX - touchStartX;
+        const deltaY = touchEndY - touchStartY;
+
+        if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > swipeThresholdY) {
+            if (deltaY < 0) handlePlayerInput('Space');
+        } else if (Math.abs(deltaX) > swipeThresholdX) {
+            if (deltaX < 0) handlePlayerInput('ArrowLeft');
+            else handlePlayerInput('ArrowRight');
+        } else if (deltaTime < tapMaxTime && Math.abs(deltaX) < swipeThresholdX && Math.abs(deltaY) < swipeThresholdY) {
+            // Considerar un tap como salto si no es un swipe claro
+            handlePlayerInput('Space'); 
+        }
+    }
+
+    function handlePlayerInput(action) {
+        switch (action) {
+            case 'ArrowLeft': case 'KeyA':
+                if (currentPlayerLane > 0) currentPlayerLane--;
+                break;
+            case 'ArrowRight': case 'KeyD':
+                if (currentPlayerLane < lanePositions.length - 1) currentPlayerLane++;
+                break;
+            case 'Space': case 'ArrowUp': case 'KeyW':
+                if (!playerIsJumping) {
+                    playerIsJumping = true;
+                    playerVelocityY = jumpStrength;
+                    playerTargetScale.set(0.8, 1.3, 0.8);
+                }
+                break;
+        }
+    }
+    
+    function updatePlayerMovement() {
+        const targetX = lanePositions[currentPlayerLane];
+        player.position.x += (targetX - player.position.x) * playerLaneChangeSpeed;
+
+        if (playerIsJumping) {
+            player.position.y += playerVelocityY;
+            playerVelocityY -= gravity;
+            if (playerVelocityY > 0) playerTargetScale.set(0.9, 1.2, 0.9);
+            else playerTargetScale.set(1.1, 0.9, 1.1);
+
+            if (player.position.y <= groundY) {
+                player.position.y = groundY;
+                playerIsJumping = false;
+                playerVelocityY = 0;
+                playerTargetScale.set(1.2, 0.8, 1.2);
+            }
+        } else {
+            if(Math.abs(player.scale.y - 1) > 0.01 || Math.abs(playerTargetScale.y - 1) < 0.01) {
+                 playerTargetScale.set(1,1,1);
+            }
+        }
+        player.scale.x += (playerTargetScale.x - player.scale.x) * 0.3;
+        player.scale.y += (playerTargetScale.y - player.scale.y) * 0.3;
+        player.scale.z += (playerTargetScale.z - player.scale.z) * 0.3;
+        playerBoundingBox.setFromObject(player);
+    }
+
+    function spawnItem() {
+        const itemTypeRand = Math.random();
+        let itemMesh;
+        
+        let obstacleHeight = 0.9, obstacleWidth = 0.9, obstacleDepth = 0.9;
+        let obstacleYOffset = 0.05;
+
+        if (itemTypeRand < 0.60) { 
+            itemMesh = new THREE.Mesh(coinGeometry, coinMaterial.clone());
+            itemMesh.rotation.x = Math.PI / 2;
+            itemMesh.userData = { type: 'coin', collected: false };
+            itemMesh.position.y = groundY + 0.4; 
+        } else { 
+            if (Math.random() < 0.2) { 
+                obstacleHeight = 1.5; 
+                obstacleWidth = 0.7;
+                obstacleYOffset = 0.35; 
+            } else if (Math.random() < 0.15) { 
+                obstacleWidth = 2.0; 
+                obstacleHeight = 0.5;
+            }
+            const obsGeom = new THREE.BoxGeometry(obstacleWidth, obstacleHeight, obstacleDepth);
+            itemMesh = new THREE.Mesh(obsGeom, obstacleMaterial.clone());
+            itemMesh.userData = { type: 'obstacle' };
+            itemMesh.position.y = groundY + obstacleYOffset; 
+        }
+
+        const laneIndex = Math.floor(Math.random() * lanePositions.length);
+        itemMesh.position.x = lanePositions[laneIndex];
+        itemMesh.position.z = -50 - Math.random() * 20; 
+        itemMesh.castShadow = true;
+        itemMesh.receiveShadow = true;
+        scene.add(itemMesh);
+        gameItems.push(itemMesh);
+    }
+
+    function createCoinParticles(position) {
+        const numParticles = 5;
+        // Usar un solo material para todas las partículas de una explosión para optimizar
+        const particleMaterialInstance = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.9 }); 
+        for (let i = 0; i < numParticles; i++) {
+            const particleGeom = new THREE.SphereGeometry(0.05 + Math.random() * 0.05, 5, 5); // Geometría más simple
+            const particleMesh = new THREE.Mesh(particleGeom, particleMaterialInstance);
+            particleMesh.position.copy(position);
+            const particleData = {
+                mesh: particleMesh, // Guardar referencia al mesh
+                velocity: new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.4, 
+                    (Math.random() * 0.4) + 0.15, 
+                    (Math.random() - 0.5) * 0.4  
+                ),
+                lifespan: 0.4 + Math.random() * 0.4, 
+                createdAt: performance.now() // No se usa directamente, pero útil para debug
+            };
+            scene.add(particleMesh);
+            activeParticles.push(particleData);
+        }
+    }
+
+    function updateParticles(deltaTime) { 
+        for (let i = activeParticles.length - 1; i >= 0; i--) {
+            const pData = activeParticles[i];
+            pData.mesh.position.addScaledVector(pData.velocity, deltaTime * 5); 
+            pData.velocity.y -= gravity * deltaTime * 4; // Gravedad más fuerte para partículas
+            pData.lifespan -= deltaTime;
+            
+            pData.mesh.material.opacity = Math.max(0, (pData.lifespan / 0.8) * 0.9); // Fade out más suave
+
+            if (pData.lifespan <= 0) {
+                scene.remove(pData.mesh); 
+                activeParticles.splice(i, 1);
+            }
+        }
+    }
+
+    function updateItemsAndCollisions() {
+        for (let i = gameItems.length - 1; i >= 0; i--) {
+            const item = gameItems[i];
+            if (!item) continue;
+            
+            item.position.z += currentGameSpeed;
+            if (item.userData.type === 'coin') item.rotation.y += currentGameSpeed * 0.8;
+            else item.rotation.y += currentGameSpeed * 0.2;
+
+            if (item.position.z > camera.position.z + 20) { 
+                scene.remove(item);
+                gameItems.splice(i, 1);
+                continue;
+            }
+            
+            // Solo chequear colisión si el item está razonablemente cerca
+            if (item.position.z > player.position.z - 1.8 && item.position.z < player.position.z + 1.8) {
+                const itemBoundingBox = new THREE.Box3().setFromObject(item);
+                if (playerBoundingBox.intersectsBox(itemBoundingBox)) {
+                    if (item.userData.type === 'coin' && !item.userData.collected) {
+                        item.userData.collected = true;
+                        createCoinParticles(item.position.clone());
+                        scene.remove(item); 
+                        gameItems.splice(i, 1);
+                        score += 10;
+                        updateScoreDisplay();
+                    } else if (item.userData.type === 'obstacle') {
+                        player.material.color.setHex(playerHitMaterialColor);
+                        playerTargetScale.set(1.3, 0.7, 1.3);
+                        shakeDuration = 0.25; // Duración del screen shake en segundos
+                        triggerEndGame();
+                        return; 
+                    }
+                }
+            }
+        }
+    }
+    
+    function updateDifficulty() { 
+        if (currentGameSpeed < maxGameSpeed) {
+            currentGameSpeed += 0.00009 + (score / 120000);
+            if (currentGameSpeed > maxGameSpeed) currentGameSpeed = maxGameSpeed;
+        }
+        if (currentSpawnInterval > minSpawnInterval) {
+            currentSpawnInterval -= 0.40 + (score / 8000); 
+            if (currentSpawnInterval < minSpawnInterval) currentSpawnInterval = minSpawnInterval;
+        }
+    }
+
+    function updateScoreDisplay() {
+        scoreBoardElement.textContent = `Puntuación: ${score}`;
+    }
+
+    function triggerEndGame() {
+        currentGameState = GAME_STATE.GAME_OVER;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+
+        const isNewRecord = saveHighScore();
+        finalScoreElement.textContent = score;
+        finalHighScoreElement.textContent = highScore;
+        newRecordTextElement.style.display = isNewRecord ? 'block' : 'none';
+        
+        gameOverScreenElement.classList.add('visible');
+        scoreBoardElement.style.opacity = 0;
+        highScoreElement.style.opacity = 0;
+        pauseButton.style.opacity = 0;
+        pauseButton.style.display = 'none';
+    }
+    
+    let lastFrameTime = performance.now();
+
+    function loop(currentTime) {
+        animationFrameId = requestAnimationFrame(loop); // Solicitar el siguiente frame primero
+        const deltaTime = (currentTime - lastFrameTime) / 1000;
+        lastFrameTime = currentTime;
+
+        if (currentGameState === GAME_STATE.PAUSED) {
+            renderer.render(scene, camera);
+            return;
+        }
+        if (currentGameState === GAME_STATE.GAME_OVER) {
+            if (shakeDuration > 0) {
+                const shakeX = (Math.random() - 0.5) * shakeIntensity * 2; // Shake más notorio
+                const shakeY = (Math.random() - 0.5) * shakeIntensity * 2;
+                camera.position.x += shakeX;
+                camera.position.y += shakeY;
+                shakeDuration -= deltaTime;
+                if (shakeDuration <= 0) { 
+                    camera.position.set(0, 2.2, 7.0); 
+                    camera.lookAt(0,0.5,0);
+                }
+            }
+            renderer.render(scene, camera);
+            return;
+        }
+        if (currentGameState === GAME_STATE.PRE_GAME) {
+            // Rotar cámara lentamente en la pantalla de inicio (opcional)
+            // scene.rotation.y += deltaTime * 0.05;
+            renderer.render(scene, camera);
+            return;
+        }
+
+        // --- Lógica del juego para GAME_STATE.PLAYING ---
+        updatePlayerMovement();
+        
+        if (currentTime - lastSpawnTime > currentSpawnInterval) {
+            if (gameItems.length < 40) spawnItem();
+            lastSpawnTime = currentTime;
+        }
+        
+        updateItemsAndCollisions();
+        if (currentGameState === GAME_STATE.GAME_OVER) return; // Salir si colisión causó fin durante updateItems
+
+        updateParticles(deltaTime);
+        updateDifficulty();
+
+        renderer.render(scene, camera);
+    }
+
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); 
+    }
+    
+    // --- Inicialización ---
+    cacheUIElements(); 
+    initThreeJS();
+    setupEventListeners(); // <-- LLAMADA AÑADIDA Y CORREGIDA AQUÍ
+    // Mostrar pantalla de inicio por defecto (manejado por CSS 'visible' en #startScreen)
+    // El loop se inicia cuando el jugador presiona "Empezar Juego" o toca la pantalla en PRE_GAME
+
+</script>
+</body>
+</html>
